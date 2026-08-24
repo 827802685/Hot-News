@@ -1,0 +1,30 @@
+name = "hot-news"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ============================================================
+# 本项目绑定 D1(消息记录) 与 KV(幂等/初始化标记)。
+#
+# 注意：D1 数据库与 KV 命名空间只在【首次部署】时创建一次。
+# 请运行一键初始化脚本，它会自动创建资源并把真实 ID 回填到下方：
+#
+#   npm install
+#   npm run setup
+#
+# 脚本只会在 ID 仍是占位符时执行创建（这正是"只在第一次部署创建"
+# 的保证），之后就跳过，避免重复创建。你也可以手动创建后用下面的
+# 命令回填 ID：
+#   npx wrangler d1 create hot-news-db
+#   npx wrangler kv namespace create push_kv
+# ============================================================
+
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "PASTE_KV_NAMESPACE_ID_HERE"
+
+[[d1_databases]]
+binding = "HB_DB"
+database_name = "hot-news-db"
+database_id = "PASTE_D1_DATABASE_ID_HERE"
+migrations_dir = "migrations"

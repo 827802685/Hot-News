@@ -1,0 +1,19 @@
+{
+  "name": "hot-news",
+  "version": "1.0.0",
+  "description": "接收所有消息(含用户手工输入)并实时推送至企业微信的 Cloudflare Worker，D1 记录、KV 幂等去重",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "wrangler dev --local",
+    "dev:remote": "wrangler dev",
+    "migrate:local": "wrangler d1 migrations apply hot-news-db --local",
+    "migrate:remote": "wrangler d1 migrations apply hot-news-db --remote",
+    "deploy": "wrangler deploy",
+    "check": "node --check src/index.js && node --check src/wecom.js"
+  },
+  "devDependencies": {
+    "wrangler": "^3.100.0"
+  }
+}
