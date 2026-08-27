@@ -13,6 +13,15 @@
 
 ---
 
+> ### 📌 线上部署说明
+> 当前线上实际运行在 **`news.zjkl.qzz.io`（hot-news Worker）** 的是完整功能版项目（含 Web 控制面板、AI 新闻筛选、多源抓取、多通道推送、S3 归档）。线上最近一次加固：
+> - **流水线锁加 30 分钟自动过期**，避免异常退出后死锁导致停止推送；
+> - **新增即时推送接口 `POST /message`**：可把你手工输入的消息立即推送到企业微信（`curl -X POST https://news.zjkl.qzz.io/message -H "Content-Type: application/json" -d '{"content":"你好"}'`）。
+>
+> 该版本的完整线上快照（worker + 资源模板 + 部署 metadata + 回滚方法）见 [`deployed/`](deployed/ 相关文件) 与 [`DEPLOYMENT.md`](DEPLOYMENT.md)。
+
+---
+
 ## 目录
 
 - [功能特性](#功能特性)

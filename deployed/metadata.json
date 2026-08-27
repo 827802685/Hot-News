@@ -1,0 +1,71 @@
+{
+  "main_module": "worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "bindings": [
+    {
+      "name": "AI",
+      "project": "<catalog>",
+      "type": "ai"
+    },
+    {
+      "name": "AI_API_BASE",
+      "text": "https://api.deepseek.com/v1",
+      "type": "plain_text"
+    },
+    {
+      "name": "AI_API_KEY",
+      "text": "",
+      "type": "plain_text"
+    },
+    {
+      "name": "AI_MODEL",
+      "text": "deepseek-chat",
+      "type": "plain_text"
+    },
+    {
+      "database_id": "12a7a8d3-f464-4789-a80a-130e689cb44e",
+      "id": "12a7a8d3-f464-4789-a80a-130e689cb44e",
+      "name": "DB",
+      "type": "d1"
+    },
+    {
+      "name": "KV",
+      "namespace_id": "422b526e3ecf4fada2b583d0442ff6d3",
+      "type": "kv_namespace"
+    },
+    {
+      "name": "NEWSNOW_API_URL",
+      "text": "https://newsnow.busiyi.world/api/s",
+      "type": "plain_text"
+    },
+    {
+      "name": "S3_BUCKET",
+      "text": "",
+      "type": "plain_text"
+    },
+    {
+      "name": "S3_ENDPOINT",
+      "text": "",
+      "type": "plain_text"
+    },
+    {
+      "name": "S3_PATH_PREFIX",
+      "text": "hot-news",
+      "type": "plain_text"
+    },
+    {
+      "name": "S3_REGION",
+      "text": "auto",
+      "type": "plain_text"
+    }
+  ],
+  "schedule": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  },
+  "usage_model": "standard"
+}

@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hot-news 控制面板</title>
+<style>
+:root{--bg:#0a0c12;--card:rgba(24,28,38,.5);--card2:rgba(30,34,46,.6);--fg:#e6e8ee;--muted:#9aa0b0;--accent:#818cf8;--accent2:#6366f1;--border:rgba(255,255,255,.09);--green:#34d399;--red:#f87171;--yellow:#fbbf24}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:
+  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.20), transparent 60%),
+  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.16), transparent 55%),
+  radial-gradient(900px 700px at 50% 120%, rgba(34,211,238,.10), transparent 60%),
+  #0a0c12;color:var(--fg);font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+input,select,textarea,button{font:inherit;color:var(--fg)}
+button{cursor:pointer}
+.btn{background:var(--accent);color:#0a0c12;border:0;border-radius:8px;padding:8px 16px;font-weight:600}
+.btn:hover{background:#a5b4fc}
+.btn.ghost{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);backdrop-filter:blur(8px)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn.danger{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* 登录页 */
+#auth-view{max-width:360px;margin:120px auto;padding:28px;background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.4);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+#auth-view h1{font-size:20px;margin-bottom:18px;text-align:center}
+#auth-view .field{margin-bottom:12px}
+#auth-view input{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px}
+#auth-view .btn{width:100%}
+.err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
+.hint{color:var(--muted);font-size:12px;text-align:center;margin-top:12px}
+
+/* 主界面 */
+#app-view{display:none}
+.app-layout{display:flex;min-height:100vh}
+.sidebar{width:200px;flex-shrink:0;background:rgba(16,19,27,.6);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;position:sticky;top:0;height:100vh}
+.sidebar .brand{font-weight:700;font-size:16px;padding:4px 8px;white-space:nowrap;background:linear-gradient(90deg,#a5b4fc,#e0e7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.side-nav{display:flex;flex-direction:column;gap:2px;margin-top:16px;flex:1;overflow-y:auto}
+.sidebar .tab{padding:10px 12px;border-radius:10px;color:var(--muted);white-space:nowrap;border:0;background:transparent;text-align:left;display:block;width:100%}
+.sidebar .tab:hover{background:rgba(129,140,248,.08);color:var(--fg)}
+.sidebar .tab.active{background:rgba(129,140,248,.16);color:#c7d2fe;font-weight:600;box-shadow:inset 0 0 0 1px rgba(129,140,248,.25)}
+.side-foot{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
+.side-foot .user{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-foot .btn{text-align:center}
+
+main{flex:1;max-width:1080px;margin:20px auto;padding:0 16px;min-width:0}
+.panel{display:none;background:rgba(18,21,30,.45);border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.panel.active{display:block}
+.panel h2{font-size:18px;margin-bottom:4px}
+.panel .desc{color:var(--muted);font-size:13px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:rgba(30,34,46,.55);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.card h3{font-size:14px;margin-bottom:12px;color:var(--fg)}
+.field{margin-bottom:12px}
+.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+.field input[type=text],.field input[type=password],.field input[type=number],.field select,.field textarea{width:100%;background:rgba(13,16,23,.6);border:1px solid var(--border);border-radius:10px;padding:8px 10px;backdrop-filter:blur(8px)}
+.field textarea{min-height:90px;resize:vertical}
+.field input[type=text]:focus,.field input[type=password]:focus,.field input[type=number]:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(129,140,248,.15)}
+.field input[type=checkbox]{width:auto}
+.checkbox{display:flex;align-items:center;gap:8px}
+.checkbox input{width:auto}
+.row{display:flex;gap:10px;align-items:flex-end}
+.row .field{flex:1;margin-bottom:0}
+.item-list{margin-top:8px}
+.item-row{display:flex;gap:8px;align-items:center;background:rgba(13,16,23,.5);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;flex-wrap:wrap}
+.item-row input,.item-row select{background:rgba(13,16,23,.6);border:1px solid var(--border);border-radius:8px;padding:6px 8px;min-width:120px;flex:1}
+.item-row .del{background:transparent;border:0;color:var(--red);font-size:16px;cursor:pointer}
+.sub-actions{margin-top:20px;display:flex;gap:10px;align-items:center}
+.sub-actions .btn{background:var(--accent)}
+.notice{font-size:12px;color:var(--yellow)}
+.ok{color:var(--green)}
+.badge{display:inline-block;background:rgba(129,140,248,.18);color:#c7d2fe;border-radius:6px;padding:2px 8px;font-size:12px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(29,33,43,.9);border:1px solid var(--border);border-radius:12px;padding:10px 18px;box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:99;display:none;max-width:80%;backdrop-filter:blur(12px)}
+#toast.show{display:block}
+#toast.ok{border-color:var(--green)}
+#toast.err{border-color:var(--red)}
+.status-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted);word-break:break-all}
+code{background:rgba(13,16,23,.6);padding:2px 6px;border-radius:6px;font-size:12px;border:1px solid var(--border)}
+h4{margin:16px 0 8px;color:var(--muted);font-size:13px}
+hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+html[data-theme="light"] body{background:
+  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.14), transparent 60%),
+  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.12), transparent 55%),
+  #f4f6fb;color:#1a1c23}
+html[data-theme="light"] .sidebar{background:rgba(255,255,255,.72);border-right-color:rgba(0,0,0,.08)}
+html[data-theme="light"] .sidebar .tab:hover{background:rgba(79,70,229,.08);color:#1a1c23}
+html[data-theme="light"] .sidebar .tab.active{background:rgba(79,70,229,.14);color:#4f46e5;box-shadow:inset 0 0 0 1px rgba(79,70,229,.25)}
+html[data-theme="light"] .panel{background:rgba(255,255,255,.75);border-color:rgba(0,0,0,.08);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+html[data-theme="light"] .card{background:rgba(255,255,255,.8);border-color:rgba(0,0,0,.08);box-shadow:0 4px 16px rgba(15,23,42,.05)}
+html[data-theme="light"] .field input[type=text],html[data-theme="light"] .field input[type=password],html[data-theme="light"] .field input[type=number],html[data-theme="light"] .field select,html[data-theme="light"] .field textarea{background:#fff;border-color:rgba(0,0,0,.12);color:#1a1c23}
+html[data-theme="light"] .item-row{background:#fff;border-color:rgba(0,0,0,.1)}
+html[data-theme="light"] .item-row input,html[data-theme="light"] .item-row select{background:#fff;border-color:rgba(0,0,0,.12);color:#1a1c23}
+html[data-theme="light"] .btn{background:#4f46e5;color:#fff}
+html[data-theme="light"] .btn:hover{background:#4338ca}
+html[data-theme="light"] .btn.ghost{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#1a1c23}
+html[data-theme="light"] .btn.ghost:hover{border-color:#4f46e5;color:#4f46e5}
+html[data-theme="light"] code{background:#fff;border-color:rgba(0,0,0,.1);color:#4f46e5}
+html[data-theme="light"] .badge{background:rgba(79,70,229,.14);color:#4f46e5}
+html[data-theme="light"] #toast{background:rgba(255,255,255,.95);border-color:rgba(0,0,0,.1);color:#1a1c23}
+html[data-theme="light"] #auth-view{background:rgba(255,255,255,.8);border-color:rgba(0,0,0,.08);box-shadow:0 12px 40px rgba(15,23,42,.1)}
+html[data-theme="light"] #auth-view input{background:#fff;border-color:rgba(0,0,0,.12);color:#1a1c23}
+</style>
+</head>
+<body>
+
+<div id="auth-view">
+  <h1>🔍 hot-news</h1>
+  <div id="auth-form">
+    <div class="field"><label>邮箱</label><input id="a-email" type="text" placeholder="you@example.com"></div>
+    <div class="field"><label>密码</label><input id="a-password" type="password" placeholder="至少 6 位"></div>
+    <button class="btn" id="a-btn" onclick="doAuth()">登录</button>
+    <div class="err" id="a-err"></div>
+  </div>
+</div>
+
+<div id="app-view" class="app-layout">
+<aside class="sidebar">
+  <span class="brand">hot-news</span>
+  <nav class="side-nav">
+    <button class="tab active" data-tab="overview" onclick="showTab('overview')">概览</button>
+    <button class="tab" data-tab="hotlist" onclick="showTab('hotlist')">热榜</button>
+    <button class="tab" data-tab="rss" onclick="showTab('rss')">RSS 订阅</button>
+    <button class="tab" data-tab="subs" onclick="showTab('subs')">自定义订阅</button>
+    <button class="tab" data-tab="filter" onclick="showTab('filter')">筛选</button>
+    <button class="tab" data-tab="ai" onclick="showTab('ai')">AI</button>
+    <button class="tab" data-tab="push" onclick="showTab('push')">推送</button>
+    <button class="tab" data-tab="storage" onclick="showTab('storage')">存储备份</button>
+    <button class="tab" data-tab="advanced" onclick="showTab('advanced')">高级</button>
+  </nav>
+  <div class="side-foot">
+    <span class="user" id="user-email"></span>
+    <button class="btn ghost" onclick="toggleTheme()" id="theme-btn">🌙 亮色</button>
+    <button class="btn ghost" onclick="location.href='/help'">配置帮助</button>
+    <button class="btn ghost" onclick="location.href='/'">查看首页</button>
+    <button class="btn ghost" onclick="doLogout()">退出</button>
+  </div>
+</aside>
+
+<main>
+<!-- 概览 -->
+<div class="panel active" id="panel-overview">
+  <h2>运行概览</h2>
+  <p class="desc">定时调度：每 15 分钟 tick，热榜/RSS/备份按各自配置判断是否到点。</p>
+  <div class="card">
+    <h3>运行状态</h3>
+    <div class="status-row"><span>流水线状态：</span><span id="ov-running">…</span></div>
+    <div class="status-row"><span>上次热榜抓取：</span><span class="mono" id="ov-lastcrawl">-</span></div>
+    <div class="status-row"><span>上次运行：</span><span class="mono" id="ov-lastrun">-</span></div>
+    <div class="status-row"><span>Cron：</span><code>*/15 * * * *</code></div>
+    <div class="sub-actions">
+      <button class="btn" onclick="runPipeline()">▶ 立即运行</button>
+      <button class="btn" onclick="pushNow()">📤 立即推送</button>
+      <button class="btn ghost" onclick="pushReport('daily')">📅 推送日报</button>
+      <button class="btn ghost" onclick="pushReport('weekly')">🗓 推送周报</button>
+      <button class="btn ghost" onclick="testPush()">测试推送</button>
+      <button class="btn ghost" onclick="manualBackup()">立即备份</button>
+      <button class="btn ghost" onclick="refreshOverview()">刷新</button>
+    </div>
+    <h4>自定义订阅源</h4>
+    <div id="ov-subs" class="mono"></div>
+  </div>
+</div>
+
+<!-- 热榜 -->
+<div class="panel" id="panel-hotlist">
+  <h2>热榜抓取</h2>
+  <p class="desc">数据源来自 newsnow 项目，可自定义 API 地址。来源列表可增删，域名校验自动保护。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>基本设置</h3>
+      <div class="field checkbox"><input id="c-platforms-enabled" type="checkbox" data-path="platforms.enabled"><label>启用热榜抓取</label></div>
+      <div class="field"><label>抓取间隔（分钟）</label><input id="c-platforms-interval" type="number" data-path="platforms.interval_minutes"></div>
+      <div class="field"><label>API 地址（留空用默认 newsnow）</label><input type="text" data-path="platforms.api_url" placeholder="https://newsnow.busiyi.world/api/s"></div>
+    </div>
+    <div class="card">
+      <h3>来源列表</h3>
+      <div id="sources-list" class="item-list"></div>
+      <button class="btn ghost" onclick="addSource()">+ 添加来源</button>
+    </div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存热榜配置</button></div>
+</div>
+
+<!-- RSS -->
+<div class="panel" id="panel-rss">
+  <h2>RSS 订阅源（内置）</h2>
+  <p class="desc">固定的 RSS 源列表，与「自定义订阅」分开。推送时按关键词/AI 过滤并做新鲜度检查。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>基本设置</h3>
+      <div class="field checkbox"><input id="c-rss-enabled" type="checkbox" data-path="rss.enabled"><label>启用 RSS 抓取</label></div>
+      <div class="field"><label>新鲜度限制（天，0=不过滤）</label><input type="number" data-path="rss.max_age_days"></div>
+    </div>
+    <div class="card">
+      <h3>Feed 列表</h3>
+      <div id="rss-feeds-list" class="item-list"></div>
+      <button class="btn ghost" onclick="addFeed()">+ 添加 Feed</button>
+    </div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存 RSS 配置</button></div>
+</div>
+
+<!-- 自定义订阅 -->
+<div class="panel" id="panel-subs">
+  <h2>自定义订阅</h2>
+  <p class="desc">两种方式：直接从「热榜平台」里选（无需填任何地址），或粘贴任意 RSS/Atom/网页地址。</p>
+  <div class="card">
+    <h3>添加订阅</h3>
+    <div class="row">
+      <div class="field"><label>订阅方式</label>
+        <select id="sub-kind" onchange="onSubKind()">
+          <option value="platform">热榜平台</option>
+          <option value="custom">网址 / RSS</option>
+        </select>
+      </div>
+      <div class="field" id="sub-platform-field"><label>热榜平台</label><select id="sub-platform"></select></div>
+      <div class="field" id="sub-url-field" style="display:none"><label>订阅地址</label><input id="sub-url" type="text" placeholder="https://blog.example.com/atom.xml"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="field"><label>显示名称（可选）</label><input id="sub-title" type="text" placeholder="留空自动生成"></div>
+      <div class="field"><label>拉取时间点（HH:MM 逗号分隔，可选）</label><input id="sub-pulltimes" type="text" placeholder="如 08:00,20:00"></div>
+      <button class="btn" onclick="addSubscription()">添加</button>
+    </div>
+    <p class="hint">「热榜平台」订阅会自动生成 RSS（/rss/hot/{平台}.xml），内容来自你配置的热榜抓取；「网址」支持任意 RSS/Atom 或网页。</p>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>我的订阅</h3>
+    <div id="subs-list"></div>
+  </div>
+</div>
+
+<!-- 筛选 -->
+<div class="panel" id="panel-filter">
+  <h2>内容筛选</h2>
+  <p class="desc">关键词模式零成本、规则固定；AI 模式更灵活但消耗 token。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>筛选方式</h3>
+      <div class="field"><label>方法</label><select data-path="filter.method"><option value="keyword">关键词匹配</option><option value="ai">AI 智能筛选</option></select></div>
+      <div class="field"><label>每关键词最多条数</label><input type="number" data-path="filter.max_news_per_keyword"></div>
+      <div class="field"><label>排名高亮阈值</label><input type="number" data-path="filter.rank_threshold"></div>
+      <div class="field"><label>关键词（每行一个）</label><textarea data-path="filter.keywords" data-array="true"></textarea></div>
+      <div class="field"><label>AI 兴趣描述（AI 模式用）</label><textarea data-path="filter.interests"></textarea></div>
+      <div class="field"><label>AI 最低分数（0~1）</label><input type="number" step="0.05" data-path="filter.min_score"></div>
+    </div>
+    <div class="card">
+      <h3>报告</h3>
+      <div class="field"><label>报告模式</label><select data-path="report.mode"><option value="current">当前榜单</option><option value="daily">当日汇总</option><option value="incremental">增量监控</option></select></div>
+      <div class="field"><label>分组维度</label><select data-path="report.display_mode"><option value="keyword">按关键词</option><option value="platform">按平台</option></select></div>
+      <div class="field"><label>今日焦点条数（必达 Top N）</label><input type="number" data-path="report.top_count"></div>
+      <p class="hint">「今日焦点」无论关键词是否命中都会推送给全部通道。</p>
+      <hr>
+      <h3>定时日报</h3>
+      <div class="field checkbox"><input type="checkbox" data-path="report.daily.enabled"><label>启用日报</label></div>
+      <div class="field"><label>日报推送时间（HH:MM）</label><input type="text" data-path="report.daily.time" placeholder="21:00"></div>
+      <h3>定时周报</h3>
+      <div class="field checkbox"><input type="checkbox" data-path="report.weekly.enabled"><label>启用周报</label></div>
+      <div class="field"><label>周报星期</label><select data-path="report.weekly.day"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></div>
+      <div class="field"><label>周报推送时间（HH:MM）</label><input type="text" data-path="report.weekly.time" placeholder="20:00"></div>
+    </div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存筛选配置</button></div>
+</div>
+
+<!-- AI -->
+<div class="panel" id="panel-ai">
+  <h2>AI 配置</h2>
+  <p class="desc">支持外部 OpenAI 兼容 API（DeepSeek/OpenAI 等）与 Cloudflare Workers AI 双通道，随时切换。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>模型</h3>
+      <div class="field"><label>通道</label><select data-path="ai.provider"><option value="openai">外部 API（OpenAI 兼容）</option><option value="workers-ai">Cloudflare Workers AI</option></select></div>
+      <div class="field"><label>API 地址</label><input type="text" data-path="ai.api_base" placeholder="https://api.deepseek.com/v1"></div>
+      <div class="field"><label>API Key</label><input type="password" data-path="ai.api_key"></div>
+      <div class="field"><label>模型名</label><input type="text" data-path="ai.model" placeholder="deepseek-chat"></div>
+      <div class="field"><label>温度</label><input type="number" step="0.1" data-path="ai.temperature"></div>
+      <div class="field"><label>最大 tokens</label><input type="number" data-path="ai.max_tokens"></div>
+      <div class="sub-actions"><button class="btn ghost" onclick="checkAi()">检查 AI 可用性</button><span id="ai-check"></span></div>
+    </div>
+    <div class="card">
+      <h3>AI 分析</h3>
+      <div class="field checkbox"><input type="checkbox" data-path="ai_analysis.enabled"><label>启用 AI 每日分析</label></div>
+      <div class="field"><label>分析语言</label><input type="text" data-path="ai_analysis.language"></div>
+      <div class="field"><label>参与分析新闻数上限</label><input type="number" data-path="ai_analysis.max_news_for_analysis"></div>
+      <div class="field checkbox"><input type="checkbox" data-path="ai_analysis.include_rss"><label>包含 RSS 内容</label></div>
+      <hr>
+      <h3>AI 翻译（暂随分析，可独立开关）</h3>
+      <div class="field checkbox"><input type="checkbox" data-path="ai_translation.enabled"><label>启用翻译</label></div>
+      <div class="field"><label>目标语言</label><input type="text" data-path="ai_translation.language"></div>
+    </div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存 AI 配置</button></div>
+</div>
+
+<!-- 推送 -->
+<div class="panel" id="panel-push">
+  <h2>推送通知</h2>
+  <p class="desc">共 10 个通道，填好配置即自动启用（无需逐个开关）。关闭总开关后所有通道停止。</p>
+  <div class="field checkbox" style="margin-bottom:14px"><input type="checkbox" data-path="notification.enabled"><label>启用推送（总开关）</label></div>
+  <div class="grid" id="push-grid">
+    <div class="card"><h3>飞书 Feishu</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.feishu.webhook_url"></div></div>
+    <div class="card"><h3>钉钉 DingTalk</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.dingtalk.webhook_url"></div></div>
+    <div class="card"><h3>企业微信 Wework</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.wework.webhook_url"></div>
+      <div class="field"><label>消息类型</label><select data-path="notification.channels.wework.msg_type"><option value="markdown">markdown</option><option value="text">text</option></select></div></div>
+    <div class="card"><h3>Telegram</h3><div class="field"><label>Bot Token</label><input type="password" data-path="notification.channels.telegram.bot_token"></div>
+      <div class="field"><label>Chat ID</label><input type="text" data-path="notification.channels.telegram.chat_id"></div></div>
+    <div class="card"><h3>邮件 Email（Resend）</h3><div class="field"><label>Resend API Key</label><input type="password" data-path="notification.channels.email.resend_api_key"></div>
+      <div class="field"><label>发件人</label><input type="text" data-path="notification.channels.email.from" placeholder="HotNews &lt;onboarding@resend.dev&gt;"></div>
+      <div class="field"><label>收件人（逗号分隔）</label><input type="text" data-path="notification.channels.email.to"></div></div>
+    <div class="card"><h3>ntfy</h3><div class="field"><label>服务器</label><input type="text" data-path="notification.channels.ntfy.server_url"></div>
+      <div class="field"><label>Topic</label><input type="text" data-path="notification.channels.ntfy.topic"></div>
+      <div class="field"><label>Token（可选）</label><input type="password" data-path="notification.channels.ntfy.token"></div></div>
+    <div class="card"><h3>Bark</h3><div class="field"><label>URL</label><input type="text" data-path="notification.channels.bark.url" placeholder="https://api.day.app/yourkey"></div></div>
+    <div class="card"><h3>Slack</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.slack.webhook_url"></div></div>
+    <div class="card"><h3>通用 Webhook</h3><div class="field"><label>URL</label><input type="text" data-path="notification.channels.generic_webhook.webhook_url"></div>
+      <div class="field"><label>JSON 模板（{title}/{content}）</label><input type="text" data-path="notification.channels.generic_webhook.payload_template" placeholder='{"content":"{content}"}'></div></div>
+    <div class="card"><h3>QQ 官方机器人</h3><div class="field"><label>App ID</label><input type="text" data-path="notification.channels.qq.app_id"></div>
+      <div class="field"><label>App Secret</label><input type="password" data-path="notification.channels.qq.app_secret"></div>
+      <div class="field"><label>目标类型</label><select data-path="notification.channels.qq.target_type"><option value="group">群</option><option value="channel">频道</option><option value="c2c">单聊（私聊）</option></select></div>
+      <div class="field"><label>目标 ID（openid）</label><input type="text" data-path="notification.channels.qq.target_id" placeholder="c2c/群：openid；频道：channel_id"></div>
+      <div class="status-row"><span>已记录的 openid：</span><span class="mono" id="qq-openids" style="color:var(--green)">-</span></div>
+      <div class="sub-actions"><button class="btn ghost" onclick="refreshQqOpenids()">刷新 openid</button></div>
+      <p class="notice">先给机器人发一条私聊/群消息，再点「刷新」。需在 QQ 开放平台把「事件订阅回调地址」填为 <code>https://news.zjkl.qzz.io/qq/event</code>。单聊主动消息仅限最近有互动的用户。</p></div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存推送配置</button><button class="btn ghost" onclick="testPush()">发送测试</button></div>
+</div>
+
+<!-- 存储备份 -->
+<div class="panel" id="panel-storage">
+  <h2>存储与备份</h2>
+  <p class="desc">D1 存储全量数据（自动保留清理）；S3 兼容对象存储用于原始归档与每日备份，路径可自定义。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>S3 兼容对象存储</h3>
+      <div class="field"><label>Endpoint</label><input type="text" data-path="storage.s3.endpoint" placeholder="https://your-account.r2.cloudflarestorage.com"></div>
+      <div class="field"><label>Bucket</label><input type="text" data-path="storage.s3.bucket"></div>
+      <div class="field"><label>Region</label><input type="text" data-path="storage.s3.region"></div>
+      <div class="field"><label>Access Key</label><input type="password" data-path="storage.s3.access_key"></div>
+      <div class="field"><label>Secret Key</label><input type="password" data-path="storage.s3.secret_key"></div>
+      <div class="field"><label>路径前缀</label><input type="text" data-path="storage.s3.path_prefix"></div>
+      <div class="field checkbox"><input type="checkbox" data-path="storage.raw_archive"><label>每轮抓取原始数据归档 S3</label></div>
+    </div>
+    <div class="card">
+      <h3>每日备份</h3>
+      <div class="field checkbox"><input type="checkbox" data-path="backup.enabled"><label>启用每日备份</label></div>
+      <div class="field"><label>备份时间（HH:MM，本地时区）</label><input type="text" data-path="backup.time" placeholder="23:30"></div>
+      <div class="field"><label>S3 路径（默认 Daily backup）</label><input type="text" data-path="backup.path_prefix" placeholder="Daily backup"></div>
+      <div class="field"><label>备份保留（天）</label><input type="number" data-path="backup.retention_days"></div>
+      <p class="notice">备份产物：<code>/Daily backup/YYYY-MM-DD/full.json</code> + <code>report.md</code></p>
+      <div class="sub-actions"><button class="btn ghost" onclick="manualBackup()">立即备份</button></div>
+    </div>
+    <div class="card">
+      <h3>D1 保留策略</h3>
+      <div class="field"><label>热榜保留天数</label><input type="number" data-path="retention.news_days"></div>
+      <div class="field"><label>RSS 保留天数</label><input type="number" data-path="retention.rss_days"></div>
+    </div>
+  </div>
+  <div class="sub-actions"><button class="btn" onclick="saveConfigAll()">保存存储配置</button></div>
+</div>
+
+<!-- 高级 -->
+<div class="panel" id="panel-advanced">
+  <h2>高级设置</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>应用</h3>
+      <div class="field"><label>站点标题</label><input type="text" data-path="app.title"></div>
+      <div class="field"><label>时区</label><input type="text" data-path="app.timezone" placeholder="Asia/Shanghai"></div>
+      <div class="field"><label>账号邮箱（只读）</label><input type="text" id="adv-email" disabled></div>
+    </div>
+    <div class="card">
+      <h3>安全</h3>
+      <div class="field"><label>旧密码</label><input type="password" id="pw-old"></div>
+      <div class="field"><label>新密码</label><input type="password" id="pw-new"></div>
+      <button class="btn ghost" onclick="changePassword()">修改密码</button>
+      <hr>
+      <div class="field"><label>手动触发密钥（X-Pull-Key）</label><input type="text" id="pull-key" placeholder="留空则需登录触发"></div>
+      <button class="btn ghost" onclick="savePullKey()">保存密钥</button>
+    </div>
+  </div>
+</div>
+</main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let config = {};
+let subscriptions = [];
+
+function toast(msg, type) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show ' + (type || 'ok');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.className = '', 3000);
+}
+
+async function api(url, method, body) {
+  const opt = { method: method || 'GET', headers: {} };
+  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const res = await fetch(url, opt);
+  return res.json().catch(() => ({}));
+}
+
+// ---------- 认证 ----------
+let needSetup = false;
+async function checkAuth() {
+  const r = await api('/setting/api/status');
+  if (r.authenticated) { needSetup = false; enterApp(r.email); }
+  else {
+    needSetup = r.needsSetup;
+    $('#a-btn').textContent = needSetup ? '初始化管理员' : '登录';
+    $('#a-err').textContent = needSetup ? '首次使用，请先创建管理员账号' : '';
+    $('#auth-view').style.display = 'block';
+  }
+}
+async function doAuth() {
+  const email = $('#a-email').value.trim();
+  const password = $('#a-password').value;
+  $('#a-err').textContent = '';
+  const url = needSetup ? '/setting/api/setup' : '/setting/api/login';
+  const r = await api(url, 'POST', { email, password });
+  if (r.success) enterApp(r.email);
+  else $('#a-err').textContent = r.error || '失败';
+}
+async function doLogout() {
+  await api('/setting/api/logout', 'POST');
+  location.reload();
+}
+function enterApp(email) {
+  $('#auth-view').style.display = 'none';
+  $('#app-view').style.display = 'flex';
+  $('#user-email').textContent = email;
+  $('#adv-email').value = email || '';
+  loadAll();
+}
+
+// ---------- 配置加载 / 保存 ----------
+async function loadConfig() {
+  const r = await api('/setting/api/config');
+  if (r.success) { config = r.config; bindInputs(); renderLists(); }
+  else toast(r.error, 'err');
+}
+
+function deepGet(obj, path) {
+  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+function deepSet(obj, path, val) {
+  const keys = path.split('.');
+  let o = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!o[keys[i]] || typeof o[keys[i]] !== 'object') o[keys[i]] = {};
+    o = o[keys[i]];
+  }
+  o[keys[keys.length - 1]] = val;
+}
+
+function bindInputs() {
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    const val = deepGet(config, el.dataset.path);
+    if (el.type === 'checkbox') el.checked = !!val;
+    else if (el.dataset.array === 'true') el.value = Array.isArray(val) ? val.join('\n') : (val || '');
+    else el.value = val == null ? '' : val;
+  });
+}
+function collect() {
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    let val;
+    if (el.type === 'checkbox') val = el.checked;
+    else if (el.dataset.array === 'true') val = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
+    else if (el.type === 'number') val = Number(el.value);
+    else val = el.value;
+    deepSet(config, el.dataset.path, val);
+  });
+  syncLists();
+  return config;
+}
+async function saveConfigAll() {
+  collect();
+  const r = await api('/setting/api/config', 'PUT', { config });
+  if (r.success) { config = r.config; bindInputs(); renderLists(); toast('已保存'); }
+  else toast(r.error || '保存失败', 'err');
+}
+
+// ---------- 动态列表（热榜来源 / RSS feeds） ----------
+const PLATFORM_TYPES = [
+  ['bilibili', 'B站'], ['weibo', '微博'], ['douyin', '抖音'], ['xiaohongshu', '小红书'],
+  ['telegram', 'Telegram'], ['zhihu', '知乎'], ['tieba', '百度贴吧'], ['toutiao', '今日头条'],
+  ['baidu', '百度'], ['jike', '即刻'], ['news', '网易新闻'], ['sspai', '少数派'],
+  ['itnews', 'IT之家'], ['zol', 'ZOL'], ['custom', '自定义'],
+];
+function sourceTypeOf(s) {
+  if (s.type) return s.type;
+  if (PLATFORM_TYPES.some(([v]) => v === s.id)) return s.id;
+  return s.id ? 'custom' : '';
+}
+function onSourceType(sel) {
+  const [, i] = sel.dataset.arr.split(':');
+  const target = config.platforms.sources[Number(i)];
+  if (!target) return;
+  target.type = sel.value;
+  if (sel.value !== 'custom') target.id = sel.value;
+  const idInput = sel.closest('.item-row').querySelector(`input[data-arr="sources:${i}:id"]`);
+  if (idInput) idInput.value = target.id || '';
+}
+function addSource() {
+  config.platforms.sources.push({ id: 'bilibili', name: '', expected_domain: '', type: 'bilibili' });
+  renderSources();
+}
+function addFeed() {
+  config.rss.feeds.push({ id: '', name: '', url: '' });
+  renderFeeds();
+}
+function renderSources() {
+  const box = $('#sources-list');
+  box.innerHTML = '';
+  (config.platforms.sources || []).forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    const opts = PLATFORM_TYPES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    row.innerHTML = `<select data-arr="sources:${i}:type" onchange="onSourceType(this)">${opts}</select>` +
+      `<input data-arr="sources:${i}:id" value="${esc(s.id)}" placeholder="平台ID">` +
+      `<input data-arr="sources:${i}:name" value="${esc(s.name)}" placeholder="名称">` +
+      `<input data-arr="sources:${i}:expected_domain" value="${esc(s.expected_domain)}" placeholder="域名校验">` +
+      `<button class="del" onclick="removeAt('sources',${i})">✕</button>`;
+    box.appendChild(row);
+    row.querySelector('select').value = sourceTypeOf(s);
+  });
+}
+function renderFeeds() {
+  const box = $('#rss-feeds-list');
+  box.innerHTML = '';
+  (config.rss.feeds || []).forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    const icon = f.type === 'platform' ? '🔥' : '';
+    row.innerHTML = `<span style="min-width:16px">${icon}</span><input data-arr="feeds:${i}:id" value="${esc(f.id)}" placeholder="id"><input data-arr="feeds:${i}:name" value="${esc(f.name)}" placeholder="名称"><input data-arr="feeds:${i}:url" value="${esc(f.url)}" placeholder="RSS URL"><button class="del" onclick="removeAt('feeds',${i})">✕</button>`;
+    box.appendChild(row);
+  });
+}
+function removeAt(kind, i) {
+  if (kind === 'sources') config.platforms.sources.splice(i, 1);
+  if (kind === 'feeds') config.rss.feeds.splice(i, 1);
+  renderLists();
+}
+function syncLists() {
+  document.querySelectorAll('[data-arr]').forEach((el) => {
+    const [kind, i, field] = el.dataset.arr.split(':');
+    const target = kind === 'sources' ? config.platforms.sources : config.rss.feeds;
+    if (target && target[i]) target[i][field] = el.value;
+  });
+}
+function renderLists() { renderSources(); renderFeeds(); }
+
+// ---------- 自定义订阅 ----------
+async function loadSubs() {
+  const r = await api('/setting/api/subscriptions');
+  if (r.success) { subscriptions = r.subscriptions; renderSubs(); }
+}
+async function loadSubPlatforms() {
+  const opts = (config.platforms.sources || []).map((s) => `<option value="${esc(s.id)}">${esc(s.name || s.id)}</option>`).join('');
+  $('#sub-platform').innerHTML = opts;
+}
+function onSubKind() {
+  const kind = $('#sub-kind').value;
+  $('#sub-platform-field').style.display = kind === 'platform' ? '' : 'none';
+  $('#sub-url-field').style.display = kind === 'custom' ? '' : 'none';
+}
+function renderSubs() {
+  const box = $('#subs-list');
+  if (!subscriptions.length) { box.innerHTML = '<p class="mono">还没有订阅。上方添加。</p>'; return; }
+  box.innerHTML = '';
+  subscriptions.forEach((s) => {
+    const div = document.createElement('div');
+    div.className = 'item-row';
+    const origin = location.origin;
+    div.innerHTML = `
+      <span style="min-width:16px">${s.icon || (s.kind === 'platform' ? '🔥' : '🔗')}</span>
+      <input data-sub-title="${s.id}" value="${esc(s.title || '')}">
+      <code>${esc(origin + s.url)}</code>
+      <label class="checkbox" style="min-width:auto;font-size:12px;color:var(--muted)"><input data-sub-pull="${s.id}" type="checkbox" ${s.pullEnabled ? 'checked' : ''}>定时</label>
+      <button class="btn ghost" onclick="saveSub('${s.id}')">保存</button>
+      <button class="btn danger" onclick="delSub('${s.id}')">删除</button>`;
+    box.appendChild(div);
+  });
+}
+async function addSubscription() {
+  const kind = $('#sub-kind').value;
+  const title = $('#sub-title').value.trim();
+  const pullTimes = $('#sub-pulltimes').value.split(/[,，\s]+/).filter(Boolean);
+  const body = kind === 'platform'
+    ? { kind: 'platform', platformId: $('#sub-platform').value, title, pullTimes }
+    : { kind: 'custom', sourceUrl: $('#sub-url').value.trim(), title, pullTimes };
+  if (kind === 'platform' && !body.platformId) return toast('请选择热榜平台', 'err');
+  if (kind === 'custom' && !body.sourceUrl) return toast('请输入订阅地址', 'err');
+  const r = await api('/setting/api/subscriptions', 'POST', body);
+  if (r.success) { $('#sub-title').value = ''; $('#sub-pulltimes').value = ''; loadSubs(); toast('已添加订阅'); }
+  else toast(r.error || '添加失败', 'err');
+}
+async function saveSub(id) {
+  const title = $(`[data-sub-title="${id}"]`).value.trim();
+  const pullEnabled = $(`[data-sub-pull="${id}"]`).checked;
+  const r = await api('/setting/api/subscriptions/' + id, 'PUT', { title, pullEnabled });
+  if (r.success) toast('已保存');
+  else toast(r.error, 'err');
+}
+async function delSub(id) {
+  if (!confirm('删除该订阅？')) return;
+  const r = await api('/setting/api/subscriptions/' + id, 'DELETE');
+  if (r.success) { loadSubs(); toast('已删除'); }
+  else toast(r.error, 'err');
+}
+
+// ---------- 概览 / 操作 ----------
+async function loadOverview() {
+  const r = await api('/setting/api/pull-status');
+  if (!r.success) return;
+  $('#ov-running').innerHTML = r.running ? '<span class="badge">运行中</span>' : '<span class="ok">空闲</span>';
+  $('#ov-lastcrawl').textContent = r.lastCrawl ? new Date(r.lastCrawl).toLocaleString() : '从未';
+  $('#ov-lastrun').textContent = r.lastRun ? (r.lastRun.time ? new Date(r.lastRun.time).toLocaleString() : '-') : '从未';
+  const subs = (r.subscriptions || []).filter((s) => s.pullEnabled);
+  $('#ov-subs').innerHTML = subs.length ? subs.map((s) => `${s.title}${s.pullTimes && s.pullTimes.length ? `（${s.pullTimes.join(',')}）` : ''}`).join('<br>') : '无定时订阅';
+}
+async function runPipeline() {
+  const r = await api('/api/pull', 'POST');
+  if (r.success) { toast(r.message); setTimeout(loadOverview, 3000); }
+  else toast(r.error, 'err');
+}
+async function pushNow() {
+  const r = await api('/setting/api/push-now', 'POST');
+  if (r.success) {
+    const parts = (r.push || []).map((p) => `${p.channel}: ${p.ok ? '✅' : '❌ ' + (p.error || '')}`);
+    if (parts.length) toast((r.message ? r.message + ' | ' : '') + parts.join(' | '), r.push.some((p) => !p.ok) ? 'err' : 'ok');
+    else toast(r.message || '未推送', 'err');
+  } else toast(r.error, 'err');
+}
+async function pushReport(type) {
+  const r = await api('/setting/api/report', 'POST', { type });
+  if (r.success) {
+    const parts = (r.push || []).map((p) => `${p.channel}: ${p.ok ? '✅' : '❌ ' + (p.error || '')}`);
+    toast(parts.length ? parts.join(' | ') : '无推送结果', r.push && r.push.some((p) => !p.ok) ? 'err' : 'ok');
+  } else toast(r.error, 'err');
+}
+async function testPush() {
+  await saveConfigAll();
+  const r = await api('/setting/api/test-push', 'POST');
+  if (r.success) {
+    const parts = (r.results || []).map((p) => `${p.channel}: ${p.ok ? '✅' : '❌ ' + (p.error || '')}`);
+    toast(parts.join(' | '), r.results.some((p) => !p.ok) ? 'err' : 'ok');
+  } else toast(r.error, 'err');
+}
+async function manualBackup() {
+  const r = await api('/setting/api/backup', 'POST');
+  if (r.success) {
+    if (r.uploaded) toast('已备份: ' + r.uploaded.join(', '));
+    else toast(r.reason || '完成');
+  } else toast(r.error || '备份失败', 'err');
+}
+async function checkAi() {
+  collect();
+  const r = await api('/setting/api/ai-status');
+  $('#ai-check').textContent = r.available ? '✅ 可用 (' + r.provider + ' / ' + r.model + ')' : '❌ 未配置';
+}
+async function refreshOverview() { loadOverview(); }
+
+// ---------- 安全 ----------
+async function changePassword() {
+  const r = await api('/setting/api/change-password', 'POST', { oldPassword: $('#pw-old').value, newPassword: $('#pw-new').value });
+  if (r.success) { $('#pw-old').value = ''; $('#pw-new').value = ''; toast('密码已修改'); }
+  else toast(r.error, 'err');
+}
+async function savePullKey() {
+  const r = await api('/setting/api/pull-key', 'PUT', { key: $('#pull-key').value });
+  toast(r.success ? '已保存' : (r.error || '失败'), r.success ? 'ok' : 'err');
+}
+
+async function refreshQqOpenids() {
+  const r = await api('/setting/api/qq-openids');
+  if (!r.success) { toast(r.error, 'err'); return; }
+  const parts = [];
+  if (r.userOpenid) parts.push('单聊: ' + r.userOpenid);
+  if (r.groupOpenid) parts.push('群: ' + r.groupOpenid);
+  $('#qq-openids').textContent = parts.length ? parts.join(' | ') : '尚未收到事件';
+  toast(parts.length ? '已更新' : '还没有收到事件，先给机器人发条消息', parts.length ? 'ok' : 'err');
+}
+
+// ---------- 标签页 ----------
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+  $('#panel-' + name).classList.add('active');
+  if (name === 'overview') loadOverview();
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function loadAll() {
+  await loadConfig();
+  await Promise.all([loadSubs(), loadSubPlatforms(), loadOverview()]);
+  onSubKind();
+}
+
+// ---------- 主题 ----------
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $('#theme-btn').textContent = t === 'light' ? '🌙 深色' : '☀️ 亮色';
+  try { localStorage.setItem('hotnews_theme', t); } catch (e) {}
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+}
+(function () {
+  var saved = 'dark';
+  try { saved = localStorage.getItem('hotnews_theme') || 'dark'; } catch (e) {}
+  applyTheme(saved);
+})();
+checkAuth();
+</script>
+</body>
+</html>
