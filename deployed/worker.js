@@ -2886,11 +2886,6 @@ function renderParts(cfg, data) {
     const max = 30;
     items.slice(0, max).forEach((it) => lines.push(fmtItem(it)));
     if (items.length > max) lines.push(`\u2026 \u5171 ${items.length} \u6761`);
-    if (analysis && cat === "\u7EFC\u5408") {
-      lines.push("");
-      lines.push("\u{1F916} AI \u4ECA\u65E5\u603B\u7ED3");
-      lines.push(analysis);
-    }
     lines.push("");
     lines.push("\u{1F4A1} \u6570\u636E\u6765\u6E90\uFF1A\u70ED\u699C\u6293\u53D6");
     parts.push({ type: "part", category: cat, text: lines.join("\n"), itemsCount: items.length });
@@ -2913,6 +2908,15 @@ function renderParts(cfg, data) {
       lines.push("\u{1F4A1} \u6570\u636E\u6765\u6E90\uFF1A\u81EA\u5B9A\u4E49\u8BA2\u9605");
       parts.push({ type: "sub", subName: name, text: lines.join("\n"), itemsCount: items.length });
     });
+  }
+  if (analysis) {
+    const alines = [];
+    alines.push(`\u3010AI \u4ECA\u65E5\u603B\u7ED3\u3011${timeStr}`);
+    alines.push("");
+    alines.push(analysis);
+    alines.push("");
+    alines.push("\u{1F916} \u6570\u636E\u6765\u6E90\uFF1AAI \u5206\u6790");
+    parts.push({ type: "analysis", text: alines.join("\n") });
   }
   return parts;
 }

@@ -52,3 +52,8 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/<account>/workers/
 ```
 
 > 注意：任何回滚/更新都必须同时提交 `worker.js` 与 3 个 HTML 资源模块，否则 worker 会因找不到 `import` 的模块而部署失败。
+
+## 2026-08-27 二次改动（当前线上）
+
+1. **AI 今日总结单独一条且置顶(置后)**:`renderParts` 不再把总结嵌进「综合」条目,改为在所有热点/订阅消息**之后**追加独立一条 `【AI 今日总结】`。
+2. **热点资讯加入游戏**:确认分类列表含「游戏」,并补强线上配置 `filter.interests` / `filter.keywords` 的游戏关键词,使游戏新闻更易被 AI 筛选捞进热点。
