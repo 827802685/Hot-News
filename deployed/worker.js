@@ -2971,6 +2971,17 @@ __name(send2, "send");
 var dingtalk_default = { send: send2 };
 
 // src/push/wework.js
+var wework_rate_last = /* @__PURE__ */ new Map();
+var WEWORK_PER_MIN = 5;
+async function weworkThrottle(url) {
+  const now = Date.now();
+  const last = wework_rate_last.get(url) || 0;
+  const gap = 20 * 1e3 / WEWORK_PER_MIN;
+  const wait = last + gap - now;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  wework_rate_last.set(url, Date.now());
+}
+__name(weworkThrottle, "weworkThrottle");
 async function send3(ch, text) {
   const { webhook_url, msg_type = "markdown" } = ch;
   if (!webhook_url) return { channel: "wework", ok: false, error: "\u672A\u914D\u7F6E Webhook" };
@@ -2980,18 +2991,28 @@ async function send3(ch, text) {
   } else {
     body = { msgtype: "text", text: { content: text } };
   }
-  try {
-    const res = await fetchWithTimeout(webhook_url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json().catch(() => null);
-    const ok = res.ok && data && data.errcode === 0;
-    return { channel: "wework", ok, error: ok ? void 0 : `HTTP ${res.status}` };
-  } catch (e) {
-    return { channel: "wework", ok: false, error: e.message };
+  const maxTry = 4;
+  for (let attempt = 0; attempt <= maxTry; attempt++) {
+    await weworkThrottle(webhook_url);
+    try {
+      const res = await fetchWithTimeout(webhook_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(() => null);
+      const is429 = res.status === 429 || data && data.errcode === 45009;
+      if (is429) {
+        await new Promise((r) => setTimeout(r, 6e3 * (attempt + 1)));
+        continue;
+      }
+      const ok = res.ok && data && data.errcode === 0;
+      return { channel: "wework", ok, error: ok ? void 0 : `HTTP ${res.status}` };
+    } catch (e) {
+      return { channel: "wework", ok: false, error: e.message };
+    }
   }
+  return { channel: "wework", ok: false, error: `HTTP 429 (\u8FC7\u591A\u8BF7\u6C42)` };
 }
 __name(send3, "send");
 var wework_default = { send: send3 };
@@ -4423,7 +4444,17 @@ main{max-width:960px;margin:0 auto;padding:20px;display:flex;flex-direction:colu
 footer{padding:24px;text-align:center;color:var(--muted);font-size:12px}
 #theme-btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:4px 10px;font-size:13px;cursor:pointer}
 #theme-btn:hover{color:var(--fg)}
-@media (max-width:720px){main{padding:12px}}
+@media (max-width:720px){
+  main{padding:12px}
+  header{flex-wrap:wrap;padding:12px 14px}
+  header .ops{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+  header .ops a{margin-left:0;white-space:nowrap}
+}
+@media (max-width:400px){
+  header>div{flex-wrap:wrap;gap:8px}
+  header .date{width:100%}
+  .section li{flex-wrap:wrap}
+}
 html[data-theme="light"] body{background:
   radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.14), transparent 60%),
   radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.12), transparent 55%),

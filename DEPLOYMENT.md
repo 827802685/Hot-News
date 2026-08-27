@@ -67,3 +67,13 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/<account>/workers/
    同时删除旧的「综合 / AI / 其他」占位分类。
 2. **逐板块配置关键词**(`report.category_keywords`)：为上述 9 类分别维护独立关键词集,`顶级`(top) 条目将据其归类到对应板块输出；「游戏」分类含 29 个关键词(新游、版本更新、新赛季、电竞 LPL/KPL 等)。
 3. **筛选兴趣与关键词同步更新**(`filter.interests` / `filter.keywords`)：扩大为覆盖 9 大板块,并重点强调游戏与各板块热点,确保 AI 筛选阶段即能捞取各板块新闻。
+
+## 2026-08-27 四次改动（推送限流优化 + 手机端适配·当前线上）
+
+> 修复改 9 板块后批量推送被企业微信限流(429)、以及控制面板/首页在手机上错位的问题。已通过 wrangler 重新部署（wrangler 自动把 `worker.js` 引用的 HTML 当文本模块打包,`metadata` 需含 `modules:[{name:'...setting.html',type:'text'}]` 才不报 `Cannot use import statement`）。
+
+1. **企业微信推送限流(429)**,`src/push/wework.js`：
+   - 新增按 `webhook_url` 的**全局节流队列** `weworkThrottle`：同一 webhook 两次发送至少间隔 4 秒（折算每 20 秒最多 5 条）,批量推送时自动排队,避免一次 10 条超限。
+   - 命中 429 / `errcode 45009` 时**自动退避重试**(递增 6s/12s/18s/24s,最多 4 次)，仍失败则返回明确错误。
+2. **控制面板手机端适配**(`...-setting.html`)：补 `@media (max-width:720px)` 响应式——侧栏由固定 200px 改顶部横滑导航、卡片单列、按钮/输入换行,解决手机上错位与横向溢出；顺带 `main/panel/auth` 内边距收窄。
+3. **首页 dashboard 手机端适配**(`renderDashboard` 内联 CSS)：header 允许换行、操作链接紧凑换行、条目列表在窄屏可折行,避免头部挤压错位。

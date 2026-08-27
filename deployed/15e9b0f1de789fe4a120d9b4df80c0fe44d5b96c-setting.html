@@ -101,6 +101,25 @@ html[data-theme="light"] .badge{background:rgba(79,70,229,.14);color:#4f46e5}
 html[data-theme="light"] #toast{background:rgba(255,255,255,.95);border-color:rgba(0,0,0,.1);color:#1a1c23}
 html[data-theme="light"] #auth-view{background:rgba(255,255,255,.8);border-color:rgba(0,0,0,.08);box-shadow:0 12px 40px rgba(15,23,42,.1)}
 html[data-theme="light"] #auth-view input{background:#fff;border-color:rgba(0,0,0,.12);color:#1a1c23}
+/* 移动端适配 */
+@media (max-width:720px){
+  .app-layout{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:sticky;top:0;flex-direction:row;align-items:center;gap:0;padding:8px 10px;overflow-x:auto;z-index:10;border-right:0;border-bottom:1px solid var(--border)}
+  .sidebar .brand{font-size:14px;padding:0 6px;white-space:nowrap}
+  .side-nav{flex-direction:row;gap:2px;margin-top:0;flex:1;overflow-x:auto;scrollbar-width:none}
+  .side-nav::-webkit-scrollbar{display:none}
+  .sidebar .tab{width:auto;padding:8px 10px;white-space:nowrap;font-size:13px}
+  .side-foot{flex-direction:row;gap:6px;margin-top:0;padding-top:0;padding-left:8px;border-top:0;border-left:1px solid var(--border)}
+  .side-foot .btn{font-size:12px;padding:6px 8px;white-space:nowrap}
+  .side-foot .user{display:none}
+  main{margin:12px 0;padding:0 10px}
+  .panel{padding:16px}
+  .grid{grid-template-columns:1fr}
+  .row{flex-direction:column;align-items:stretch}
+  .sub-actions{flex-wrap:wrap;gap:8px}
+  .item-row input,.item-row select{min-width:0}
+  #auth-view{margin:48px auto;padding:20px}
+}
 </style>
 </head>
 <body>
