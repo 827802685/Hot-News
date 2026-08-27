@@ -1,0 +1,155 @@
+{
+  "app": {
+    "timezone": "Asia/Shanghai",
+    "title": "Hot News 热点速递"
+  },
+  "platforms": {
+    "enabled": true,
+    "api_url": "",
+    "interval_minutes": 60,
+    "sources": [
+      {"id": "toutiao", "name": "今日头条", "expected_domain": "toutiao.com", "type": "toutiao"},
+      {"id": "baidu", "name": "百度热搜", "expected_domain": "baidu.com", "type": "baidu"},
+      {"id": "wallstreetcn-hot", "name": "华尔街见闻", "expected_domain": "wallstreetcn.com", "type": "custom"},
+      {"id": "thepaper", "name": "澎湃新闻", "expected_domain": "thepaper.cn", "type": "custom"},
+      {"id": "bilibili-hot-search", "name": "bilibili 热搜", "expected_domain": "bilibili.com", "type": "custom"},
+      {"id": "cls-hot", "name": "财联社热门", "expected_domain": "cls.cn", "type": "custom"},
+      {"id": "ifeng", "name": "凤凰网", "expected_domain": "ifeng.com", "type": "custom"},
+      {"id": "tieba", "name": "贴吧", "expected_domain": "baidu.com", "type": "tieba"},
+      {"id": "weibo", "name": "微博", "expected_domain": "weibo.com", "type": "weibo"},
+      {"id": "douyin", "name": "抖音", "expected_domain": "douyin.com", "type": "douyin"},
+      {"id": "zhihu", "name": "知乎", "expected_domain": "zhihu.com", "type": "zhihu"}
+    ]
+  },
+  "rss": {
+    "enabled": true,
+    "max_age_days": 1,
+    "feeds": [
+      {"id": "hacker-news", "name": "Hacker News", "url": "https://hnrss.org/frontpage"}
+    ]
+  },
+  "filter": {
+    "method": "ai",
+    "keywords": [
+      "AI", "人工智能", "OpenAI", "大模型", "芯片", "英伟达", "华为", "iPhone", "苹果", "小米", "特斯拉", "比亚迪", "新能源", "A股", "股市", "美联储", "比特币", "加密货币", "游戏", "电竞", "主机", "手游", "Steam", "PlayStation", "PS5", "任天堂", "暴雪", "英雄联盟", "王者荣耀", "DOTA", "Valve", "原神", "星穹铁道", "绝区零", "崩坏"
+    ],
+    "max_news_per_keyword": 5,
+    "rank_threshold": 5,
+    "min_score": 0.7,
+    "interests": "时政与社会、财经与商业、科技与互联网、国际时事、文化与娱乐、教育、体育、游戏、健康与生活九大板块的重要新闻；游戏重点关注：原神、崩坏星穹铁道、绝区零、米哈游、Steam、任天堂、PlayStation、暴雪、英雄联盟、王者荣耀、DOTA、Valve、新游发布、版本更新、新赛季、电竞比赛、游戏行业政策动态"
+  },
+  "ai": {
+    "provider": "openai",
+    "api_base": "https://api.zjkl.dpdns.org/v1",
+    "api_key": "sk-ZVtEGXdgTpTYLg1Gfxc7TwH6i1LVaSjp",
+    "model": "agnes/agnes-2.5-flash",
+    "temperature": 0.8,
+    "max_tokens": 4000
+  },
+  "ai_analysis": {
+    "enabled": true,
+    "language": "中文",
+    "max_news_for_analysis": 100,
+    "include_rss": true
+  },
+  "ai_translation": {
+    "enabled": false,
+    "language": "中文"
+  },
+  "report": {
+    "mode": "current",
+    "display_mode": "keyword",
+    "top_count": 10,
+    "daily": {
+      "enabled": false,
+      "time": "21:00"
+    },
+    "weekly": {
+      "enabled": false,
+      "day": "7",
+      "time": "20:00"
+    },
+    "categories": [
+      "时政与社会",
+      "财经与商业",
+      "科技与互联网",
+      "国际时事",
+      "文化与娱乐",
+      "教育",
+      "体育",
+      "游戏",
+      "健康与生活"
+    ],
+    "category_keywords": {
+      "时政与社会": [
+        "政策", "会议", "法律", "法规", "人大", "政协", "国务院", "意见", "条例", "民生", "公共安全", "社会新闻", "案件", "司法", "法院", "检察院", "反腐", "治安", "事故", "通报", "发布会"
+      ],
+      "财经与商业": [
+        "GDP", "CPI", "PMI", "通胀", "经济数据", "股市", "A股", "楼市", "房价", "汇率", "人民币", "央行", "LPR", "基金", "证券", "IPO", "上市", "财报", "融资", "并购", "营收", "利润", "出口", "制造业", "行业"
+      ],
+      "科技与互联网": [
+        "AI", "人工智能", "大模型", "芯片", "半导体", "航天", "火箭", "卫星", "华为", "苹果", "小米", "新品", "发布", "操作系统", "数据安全", "监管", "平台", "算法", "算力", "机器人", "自动驾驶", "网络安全", "隐私"
+      ],
+      "国际时事": [
+        "地缘", "冲突", "战争", "制裁", "北约", "联合国", "外交", "峰会", "谈判", "美联储", "国际贸易", "关税", "美元", "全球化", "中美", "俄乌", "中东", "亚太", "国事访问"
+      ],
+      "文化与娱乐": [
+        "影视", "综艺", "电影", "电视剧", "明星", "票房", "演唱会", "热梗", "热搜", "流行", "时尚", "音乐", "娱乐", "文化", "潮流", "偶像", "出圈"
+      ],
+      "教育": [
+        "中高考", "高考", "中考", "考研", "留学", "招生", "报考", "志愿", "分数线", "录取", "教育改革", "教育部", "考试", "报名", "四六级", "公务员", "高校", "大学"
+      ],
+      "体育": [
+        "足球", "篮球", "乒乓球", "羽毛球", "排球", "国足", "中超", "NBA", "CBA", "英超", "西甲", "世界杯", "奥运会", "亚运会", "锦标赛", "运动员", "转会", "伤病", "比赛", "体育产业", "全民健身", "田径", "游泳"
+      ],
+      "游戏": [
+        "游戏", "Steam", "原神", "崩铁", "星穹铁道", "绝区零", "米哈游", "魔兽世界", "PUBG", "APEX", "LOL", "英雄联盟", "CS", "王者荣耀", "DOTA", "Valve", "Switch", "PS5", "Xbox", "Epic", "暴雪", "版号", "电竞", "LPL", "KPL", "新游", "上线", "版本更新", "新赛季"
+      ],
+      "健康与生活": [
+        "健康", "疾病", "流感", "疫苗", "医学", "养生", "膳食", "天气预警", "台风", "暴雨", "高温", "寒潮", "出行", "消费", "食品安全", "呼吸道", "传染病", "医院", "医保", "节气"
+      ]
+    }
+  },
+  "notification": {
+    "enabled": true,
+    "channels": {
+      "feishu": {"webhook_url": ""},
+      "dingtalk": {"webhook_url": ""},
+      "wework": {
+        "webhook_url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=3da35028-aa9c-46de-8273-3f78a1edd8b4",
+        "msg_type": "text"
+      },
+      "telegram": {"bot_token": "", "chat_id": ""},
+      "email": {"resend_api_key": "", "from": "", "to": ""},
+      "ntfy": {"server_url": "https://ntfy.sh", "topic": "", "token": ""},
+      "bark": {"url": ""},
+      "slack": {"webhook_url": ""},
+      "generic_webhook": {"webhook_url": "", "payload_template": ""},
+      "qq": {"app_id": "", "app_secret": "", "target_type": "c2c", "target_id": ""}
+    }
+  },
+  "storage": {
+    "s3": {
+      "endpoint": "https://clist.zjkl.dpdns.org/s3",
+      "bucket": "news",
+      "access_key": "AKF357938AC158D137FFB056A21A73BAAF",
+      "secret_key": "SK6EE5F8AA8A6B1D30A77DC2001C58E6EF86AD85BB9D7C0CD7",
+      "region": "auto",
+      "path_prefix": "hot-news"
+    },
+    "raw_archive": true
+  },
+  "backup": {
+    "enabled": false,
+    "time": "23:30",
+    "path_prefix": "Daily backup",
+    "retention_days": 30
+  },
+  "retention": {
+    "news_days": 30,
+    "rss_days": 30
+  },
+  "advanced": {
+    "debug": false
+  }
+}

@@ -53,7 +53,17 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/<account>/workers/
 
 > 注意：任何回滚/更新都必须同时提交 `worker.js` 与 3 个 HTML 资源模块，否则 worker 会因找不到 `import` 的模块而部署失败。
 
-## 2026-08-27 二次改动（当前线上）
+## 2026-08-27 二次改动
 
 1. **AI 今日总结单独一条且置顶(置后)**:`renderParts` 不再把总结嵌进「综合」条目,改为在所有热点/订阅消息**之后**追加独立一条 `【AI 今日总结】`。
 2. **热点资讯加入游戏**:确认分类列表含「游戏」,并补强线上配置 `filter.interests` / `filter.keywords` 的游戏关键词,使游戏新闻更易被 AI 筛选捞进热点。
+
+## 2026-08-27 三次改动（含完整板块设计·当前线上）
+
+> 按完整「每日热点板块设计」重排热点分类,线上 `hotnews:config` 已更新,归档见 [`deployed/config.json`](deployed/config.json)。
+
+1. **热点分类扩展为 9 大板块**(`report.categories`)：
+   1. 时政与社会　2. 财经与商业　3. 科技与互联网　4. 国际时事　5. 文化与娱乐　6. 教育　7. 体育　8. 游戏　9. 健康与生活
+   同时删除旧的「综合 / AI / 其他」占位分类。
+2. **逐板块配置关键词**(`report.category_keywords`)：为上述 9 类分别维护独立关键词集,`顶级`(top) 条目将据其归类到对应板块输出；「游戏」分类含 29 个关键词(新游、版本更新、新赛季、电竞 LPL/KPL 等)。
+3. **筛选兴趣与关键词同步更新**(`filter.interests` / `filter.keywords`)：扩大为覆盖 9 大板块,并重点强调游戏与各板块热点,确保 AI 筛选阶段即能捞取各板块新闻。
