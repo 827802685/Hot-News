@@ -2650,8 +2650,8 @@ async function chat(cfg, env, messages, opts = {}) {
         temperature
       })
     },
-    0,
-    6e4
+    1,
+    12e4
   );
   const content = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
   if (content === void 0 || content === null) throw new Error("AI \u54CD\u5E94\u683C\u5F0F\u5F02\u5E38");
@@ -2874,112 +2874,14 @@ __name(classifyItem, "classifyItem");
 __name2(classifyItem, "classifyItem");
 function fmtItem(it) {
   const p = it.platform || it.platform_name || it.platform_id || "\u70ED\u699C";
-  const title = (it._zh || it.title || "").trim() || "(\u65E0\u6807\u9898)";
+  const title = (it.title || "").trim() || "(\u65E0\u6807\u9898)";
   let summary = "";
-  const zhSum = it._zhSummary;
-  let raw2 = (zhSum || it.description || it.summary || "").replace(/\n/g, " ").replace(/<[^>]+>/g, "").trim();
-  // Telegram 解析常把整句同时写入标题与摘要，去掉"摘要以标题开头"的重复前缀
-  const origTitle = (it.title || "").trim();
-  if (raw2 && origTitle && origTitle.length > 2 && raw2.startsWith(origTitle)) {
-    raw2 = raw2.slice(origTitle.length).replace(/^[-—:…，,。.\s•·（(【[]+/, "");
-  }
+  const raw2 = (it.description || it.summary || "").replace(/\n/g, " ").replace(/<[^>]+>/g, "").trim();
   if (raw2) {
     summary = raw2.length > 100 ? raw2.slice(0, 100) + "\u2026" : raw2;
   }
-  // 每行不再附加来源署名（频道名），避免重复刷屏；来源在板块头部已标注
-  let line = summary ? `\u2022 [${p}] ${title} \u2014 ${summary}` : `\u2022 [${p}] ${title}`;
-  // 图片改为单独以"图片消息"推送（见 runPipeline），正文不再塞冗长直链
-  return line;
-}
-
-// ---- 企业微信直接发送图片：把 Telegram/热点图片以 msgtype=image 推送 ----
-function arrayToBinaryString(bytes) {
-  let bin = "";
-  const step = 32768;
-  for (let i = 0; i < bytes.length; i += step) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
-  }
-  return bin;
-}
-// 标准 MD5（binary string → hex），public-domain 算法
-function md5(string) {
-  function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
-  function AddUnsigned(lX, lY) {
-    var lX8 = (lX & 0x80000000), lY8 = (lY & 0x80000000), lX4 = (lX & 0x40000000), lY4 = (lY & 0x40000000), lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
-    if (lX4 & lY4) return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
-    if (lX4 | lY4) { if (lResult & 0x40000000) return (lResult ^ 0xC0000000 ^ lX8 ^ lY8); else return (lResult ^ 0x40000000 ^ lX8 ^ lY8); }
-    return (lResult ^ lX8 ^ lY8);
-  }
-  function F(x, y, z) { return (x & y) | (~x & z); }
-  function G(x, y, z) { return (x & z) | (y & ~z); }
-  function H(x, y, z) { return (x ^ y ^ z); }
-  function I(x, y, z) { return (y ^ (x | ~z)); }
-  function FF(a, b, c, d, x, s, ac) { a = AddUnsigned(AddUnsigned(AddUnsigned(F(b, c, d), x), ac), a); return AddUnsigned(RotateLeft(a, s), b); }
-  function GG(a, b, c, d, x, s, ac) { a = AddUnsigned(AddUnsigned(AddUnsigned(G(b, c, d), x), ac), a); return AddUnsigned(RotateLeft(a, s), b); }
-  function HH(a, b, c, d, x, s, ac) { a = AddUnsigned(AddUnsigned(AddUnsigned(H(b, c, d), x), ac), a); return AddUnsigned(RotateLeft(a, s), b); }
-  function II(a, b, c, d, x, s, ac) { a = AddUnsigned(AddUnsigned(AddUnsigned(I(b, c, d), x), ac), a); return AddUnsigned(RotateLeft(a, s), b); }
-  function ConvertToWordArray(str) {
-    var lWordCount, lMsgLen = str.length, t1 = lMsgLen + 8, t2 = (t1 - (t1 % 64)) / 64, nWords = (t2 + 1) * 16, wa = Array(nWords - 1), bPos = 0, bCount = 0;
-    while (bCount < lMsgLen) { lWordCount = (bCount - (bCount % 4)) / 4; bPos = (bCount % 4) * 8; wa[lWordCount] = (wa[lWordCount] | (str.charCodeAt(bCount) << bPos)); bCount++; }
-    lWordCount = (bCount - (bCount % 4)) / 4; bPos = (bCount % 4) * 8; wa[lWordCount] = wa[lWordCount] | (0x80 << bPos);
-    wa[nWords - 2] = lMsgLen << 3; wa[nWords - 1] = lMsgLen >>> 29;
-    return wa;
-  }
-  function WordToHex(lValue) {
-    var wv = "", temp = "", lByte, lCount;
-    for (lCount = 0; lCount <= 3; lCount++) { lByte = (lValue >>> (lCount * 8)) & 255; temp = "0" + lByte.toString(16); wv += temp.substr(temp.length - 2, 2); }
-    return wv;
-  }
-  var x = [], k, AA, BB, CC, DD, a, b, c, d;
-  var S11 = 7, S12 = 12, S13 = 17, S14 = 22, S21 = 5, S22 = 9, S23 = 14, S24 = 20, S31 = 4, S32 = 11, S33 = 16, S34 = 23, S41 = 6, S42 = 10, S43 = 15, S44 = 21;
-  x = ConvertToWordArray(string);
-  a = 0x67452301; b = 0xEFCDAB89; c = 0x98BADCFE; d = 0x10325476;
-  for (k = 0; k < x.length; k += 16) {
-    AA = a; BB = b; CC = c; DD = d;
-    a = FF(a, b, c, d, x[k], S11, 0xD76AA478); d = FF(d, a, b, c, x[k + 1], S12, 0xE8C7B756); c = FF(c, d, a, b, x[k + 2], S13, 0x242070DB); b = FF(b, c, d, a, x[k + 3], S14, 0xC1BDCEEE);
-    a = FF(a, b, c, d, x[k + 4], S11, 0xF57C0FAF); d = FF(d, a, b, c, x[k + 5], S12, 0x4787C62A); c = FF(c, d, a, b, x[k + 6], S13, 0xA8304613); b = FF(b, c, d, a, x[k + 7], S14, 0xFD469501);
-    a = FF(a, b, c, d, x[k + 8], S11, 0x698098D8); d = FF(d, a, b, c, x[k + 9], S12, 0x8B44F7AF); c = FF(c, d, a, b, x[k + 10], S13, 0xFFFF5BB1); b = FF(b, c, d, a, x[k + 11], S14, 0x895CD7BE);
-    a = FF(a, b, c, d, x[k + 12], S11, 0x6B901122); d = FF(d, a, b, c, x[k + 13], S12, 0xFD987193); c = FF(c, d, a, b, x[k + 14], S13, 0xA679438E); b = FF(b, c, d, a, x[k + 15], S14, 0x49B40821);
-    a = GG(a, b, c, d, x[k + 1], S21, 0xF61E2562); d = GG(d, a, b, c, x[k + 6], S22, 0xC040B340); c = GG(c, d, a, b, x[k + 11], S23, 0x265E5A51); b = GG(b, c, d, a, x[k], S24, 0xE9B6C7AA);
-    a = GG(a, b, c, d, x[k + 5], S21, 0xD62F105D); d = GG(d, a, b, c, x[k + 10], S22, 0x02441453); c = GG(c, d, a, b, x[k + 15], S23, 0xD8A1E681); b = GG(b, c, d, a, x[k + 4], S24, 0xE7D3FBC8);
-    a = GG(a, b, c, d, x[k + 9], S21, 0x21E1CDE6); d = GG(d, a, b, c, x[k + 14], S22, 0xC33707D6); c = GG(c, d, a, b, x[k + 3], S23, 0xF4D50D87); b = GG(b, c, d, a, x[k + 8], S24, 0x455A14ED);
-    a = GG(a, b, c, d, x[k + 13], S21, 0xA9E3E905); d = GG(d, a, b, c, x[k + 2], S22, 0xFCEFA3F8); c = GG(c, d, a, b, x[k + 7], S23, 0x676F02D9); b = GG(b, c, d, a, x[k + 12], S24, 0x8D2A4C8A);
-    a = HH(a, b, c, d, x[k + 5], S31, 0xFFFA3942); d = HH(d, a, b, c, x[k + 8], S32, 0x8771F681); c = HH(c, d, a, b, x[k + 11], S33, 0x6D9D6122); b = HH(b, c, d, a, x[k + 14], S34, 0xFDE5380C);
-    a = HH(a, b, c, d, x[k + 1], S31, 0xA4BEEA44); d = HH(d, a, b, c, x[k + 4], S32, 0x4BDECFA9); c = HH(c, d, a, b, x[k + 7], S33, 0xF6BB4B60); b = HH(b, c, d, a, x[k + 10], S34, 0xBEBFBC70);
-    a = HH(a, b, c, d, x[k + 13], S31, 0x289B7EC6); d = HH(d, a, b, c, x[k], S32, 0xEAA127FA); c = HH(c, d, a, b, x[k + 3], S33, 0xD4EF3085); b = HH(b, c, d, a, x[k + 6], S34, 0x04881D05);
-    a = HH(a, b, c, d, x[k + 9], S31, 0xD9D4D039); d = HH(d, a, b, c, x[k + 12], S32, 0xE6DB99E5); c = HH(c, d, a, b, x[k + 15], S33, 0x1FA27CF8); b = HH(b, c, d, a, x[k + 2], S34, 0xC4AC5665);
-    a = II(a, b, c, d, x[k], S41, 0xF4292244); d = II(d, a, b, c, x[k + 7], S42, 0x432AFF97); c = II(c, d, a, b, x[k + 14], S43, 0xAB9423A7); b = II(b, c, d, a, x[k + 5], S44, 0xFC93A039);
-    a = II(a, b, c, d, x[k + 12], S41, 0x655B59C3); d = II(d, a, b, c, x[k + 3], S42, 0x8F0CCC92); c = II(c, d, a, b, x[k + 10], S43, 0xFFEFF47D); b = II(b, c, d, a, x[k + 1], S44, 0x85845DD1);
-    a = II(a, b, c, d, x[k + 8], S41, 0x6FA87E4F); d = II(d, a, b, c, x[k + 15], S42, 0xFE2CE6E0); c = II(c, d, a, b, x[k + 6], S43, 0xA3014314); b = II(b, c, d, a, x[k + 13], S44, 0x4E0811A1);
-    a = II(a, b, c, d, x[k + 4], S41, 0xF7537E82); d = II(d, a, b, c, x[k + 11], S42, 0xBD3AF235); c = II(c, d, a, b, x[k + 2], S43, 0x2AD7D2BB); b = II(b, c, d, a, x[k + 9], S44, 0xEB86D391);
-    a = AddUnsigned(a, AA); b = AddUnsigned(b, BB); c = AddUnsigned(c, CC); d = AddUnsigned(d, DD);
-  }
-  return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
-}
-// 抓取图片并发送为企业微信 image 消息（≤2MB）
-async function sendWeworkImage(ch, imageUrl) {
-  const { webhook_url } = ch;
-  if (!webhook_url) return { ok: false, error: "\u672A\u914D\u7F6E Webhook", url: imageUrl };
-  let res;
-  try { res = await fetchWithTimeout(imageUrl, {}, 1, 15e3); }
-  catch (e) { return { ok: false, error: "\u6293\u56FE\u5931\u8D25: " + e.message, url: imageUrl }; }
-  if (!res.ok) return { ok: false, error: "HTTP " + res.status, url: imageUrl };
-  let buf;
-  try { buf = await res.arrayBuffer(); }
-  catch (e) { return { ok: false, error: "\u8BFB\u53D6\u56FE\u7247\u5931\u8D25", url: imageUrl }; }
-  if (buf.byteLength > 2 * 1024 * 1024) return { ok: false, error: "\u56FE\u7247\u8D85 2MB", url: imageUrl };
-  const arr = new Uint8Array(buf);
-  const bin = arrayToBinaryString(arr);
-  const body = { msgtype: "image", image: { base64: btoa(bin), md5: md5(bin) } };
-  await weworkThrottle(webhook_url);
-  try {
-    const r = await fetchWithTimeout(webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, 1, 2e4);
-    const data = await r.json().catch(() => null);
-    const ok = !!(r.ok && data && data.errcode === 0);
-    return { ok, error: ok ? void 0 : "HTTP " + r.status, url: imageUrl };
-  } catch (e) {
-    return { ok: false, error: e.message, url: imageUrl };
-  }
+  const src = it.feed_name ? `\uFF08${it.feed_name}\uFF09` : "";
+  return summary ? `\u2022 [${p}] ${title} \u2014 ${summary}${src}` : `\u2022 [${p}] ${title}${src}`;
 }
 __name(fmtItem, "fmtItem");
 __name2(fmtItem, "fmtItem");
@@ -3012,14 +2914,11 @@ function renderParts(cfg, data) {
     const lines = [];
     lines.push(`\u3010\u70ED\u70B9\u8D44\u8BAF\u3011${timeStr}  \xB7  ${idx}/${totalParts}  ${cat}`);
     const max = 30;
-    const sliceItems = items.slice(0, max);
-    sliceItems.forEach((it) => lines.push(fmtItem(it)));
+    items.slice(0, max).forEach((it) => lines.push(fmtItem(it)));
     if (items.length > max) lines.push(`\u2026 \u5171 ${items.length} \u6761`);
     lines.push("");
     lines.push("\u{1F4A1} \u6570\u636E\u6765\u6E90\uFF1A\u70ED\u699C\u6293\u53D6");
-    const catImgs = [];
-    for (const it of sliceItems) if (it.image) catImgs.push(it.image);
-    parts.push({ type: "part", category: cat, text: lines.join("\n"), itemsCount: items.length, images: catImgs });
+    parts.push({ type: "part", category: cat, text: lines.join("\n"), itemsCount: items.length });
   }
   if (rssAlways && rssAlways.length) {
     const bySub = {};
@@ -3033,14 +2932,11 @@ function renderParts(cfg, data) {
       const lines = [];
       lines.push(`\u3010\u8BA2\u9605\u66F4\u65B0\u3011${timeStr}  \xB7  ${name}`);
       const max = 20;
-      const sliceItems = items.slice(0, max);
-      sliceItems.forEach((it) => lines.push(fmtItem(it)));
+      items.slice(0, max).forEach((it) => lines.push(fmtItem(it)));
       if (items.length > max) lines.push(`\u2026 \u5171 ${items.length} \u6761`);
       lines.push("");
       lines.push("\u{1F4A1} \u6570\u636E\u6765\u6E90\uFF1A\u81EA\u5B9A\u4E49\u8BA2\u9605");
-      const subImgs = [];
-      for (const it of sliceItems) if (it.image) subImgs.push(it.image);
-      parts.push({ type: "sub", subName: name, text: lines.join("\n"), itemsCount: items.length, images: subImgs });
+      parts.push({ type: "sub", subName: name, text: lines.join("\n"), itemsCount: items.length });
     });
   }
   if (analysis) {
@@ -3446,15 +3342,12 @@ async function ensureSchema(env) {
 				first_crawl_time TEXT NOT NULL,
 				last_crawl_time TEXT NOT NULL,
 				crawl_count INTEGER DEFAULT 1,
-				created_at TEXT DEFAULT (datetime('now')),
-				image TEXT
+				created_at TEXT DEFAULT (datetime('now'))
 			)
 		`).run();
     await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_rss_feed ON rss_items(feed_id)`).run();
     await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_rss_items_date ON rss_items(date)`).run();
     await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_rss_url_feed_date ON rss_items(url, feed_id, date)`).run();
-    // 旧表补 image 列（Telegram 等条目的图片直链，用于直发图片；新表建表已含）
-    try { await env.DB.prepare(`ALTER TABLE rss_items ADD COLUMN image TEXT`).run(); } catch (e) {}
     await env.DB.prepare(`
 			CREATE TABLE IF NOT EXISTS push_records (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3551,16 +3444,15 @@ __name2(getNewsByDate, "getNewsByDate");
 async function upsertRssItems(env, items, dateStr) {
   if (!env.DB || !items || items.length === 0) return 0;
   const stmt = env.DB.prepare(`
-		INSERT INTO rss_items (title, feed_id, url, guid, date, published_at, summary, author, first_crawl_time, last_crawl_time, crawl_count, image)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+		INSERT INTO rss_items (title, feed_id, url, guid, date, published_at, summary, author, first_crawl_time, last_crawl_time, crawl_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 		ON CONFLICT(url, feed_id, date) DO UPDATE SET
 			last_crawl_time = excluded.last_crawl_time,
-			crawl_count = rss_items.crawl_count + 1,
-			image = CASE WHEN excluded.image IS NOT NULL AND excluded.image != '' THEN excluded.image ELSE rss_items.image END
+			crawl_count = rss_items.crawl_count + 1
 	`);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const rows = items.map(
-    (it) => stmt.bind(it.title, it.feed_id, it.url || "", it.guid || "", dateStr, it.published_at || "", it.summary || "", it.author || "", now, now, it.image || "")
+    (it) => stmt.bind(it.title, it.feed_id, it.url || "", it.guid || "", dateStr, it.published_at || "", it.summary || "", it.author || "", now, now)
   );
   let added = 0;
   for (let i = 0; i < rows.length; i += 100) {
@@ -4151,120 +4043,6 @@ async function archiveToS3(env, cfg, kind, payload) {
 }
 __name(archiveToS3, "archiveToS3");
 __name2(archiveToS3, "archiveToS3");
-// 判断文本是否主要为英文（含足够英文字母即认为是需翻译的英文条目）
-function isEnglishText(s) {
-  if (!s) return false;
-  const ascii = (String(s).match(/[A-Za-z]/g) || []).length;
-  const total = String(s).trim().length;
-  return total > 5 && ascii / total > 0.6;
-}
-__name(isEnglishText, "isEnglishText");
-__name2(isEnglishText, "isEnglishText");
-// 批量把英文标题/摘要翻译成指定语言；使用免密钥 Google 翻译（稳定、不受 AI 配额 429 影响），失败回退原文，绝不让翻译拖垮推送
-async function translateItems(cfg, env, items, language) {
-  const tcfg = cfg.ai_translation || {};
-  if (!tcfg.enabled) return items;
-  const lang = language || tcfg.language || "\u4E2D\u6587";
-  const to = String(lang).indexOf("\u4E2D") !== -1 ? "zh-CN" : "en";
-  const dstLang = to === "zh-CN" ? "chinese" : "english";
-  const work = [];
-  items.forEach((it) => {
-    const t = (it.title || "").trim();
-    const s = (it.summary || it.description || "").trim();
-    if (isEnglishText(t)) work.push([it, "title"]);
-    if (isEnglishText(s)) work.push([it, "summary"]);
-  });
-  if (work.length === 0) return items;
-  trVia = "\u2014";
-  trStats = { ai: 0, my: 0, err: 0, lastErr: "" };
-  // ① 先查 KV 翻译缓存：相同英文文本不重复翻译（直接复用），既省配额又压降 subrequest 数
-  // ② 未命中的部分按预算限制本轮新翻译条数，避免单次调用 subrequest 超限被强杀（Too many subrequests）
-  const MAX_NEW = 16;
-  const MAXC = 3;
-  let budget = MAX_NEW;
-  let doneCnt = 0;
-  let cacheHit = 0;
-  const toTrans = [];
-  for (const pair2 of work) {
-    const it = pair2[0], f = pair2[1];
-    const txt = f === "title" ? (it.title || "").trim() : (it.summary || it.description || "").trim();
-    const key = "tr:v1:" + await waitHash2(txt.slice(0, 800));
-    let cached = null;
-    try { cached = env && env.KV ? await env.KV.get(key) : null; } catch (e) {}
-    if (cached) { if (f === "title") it._zh = cached; else it._zhSummary = cached; cacheHit++; continue; }
-    if (budget > 0) { toTrans.push(pair2); budget--; }
-  }
-  let tPos = 0;
-  async function workerL() {
-    while (tPos < toTrans.length) {
-      const pair2 = toTrans[tPos++];
-      const it = pair2[0], f = pair2[1];
-      const txt = f === "title" ? (it.title || "").trim() : (it.summary || it.description || "").trim();
-      try {
-        const z = await translateOne(env, txt.slice(0, 800), dstLang);
-        if (z) { if (f === "title") it._zh = z; else it._zhSummary = z; doneCnt++; }
-      } catch (e) {}
-    }
-  }
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(MAXC, toTrans.length)) }, () => workerL()));
-  // 遥测：记录本次翻译成功/缓存命中/受配额上限未翻译条数，便于核对交付
-  try {
-    const samples = items.filter((x) => x._zh || x._zhSummary).map((x) => (x._zh || x._zhSummary || "").slice(0, 40)).slice(0, 3);
-    await writeKV(env, "hotnews:last:tr", JSON.stringify({ done: doneCnt, need: work.length, cacheHit, cap: MAX_NEW, deferred: toTrans.length - doneCnt, sample: samples, via: trVia, stats: trStats, at: /* @__PURE__ */ new Date().toISOString() }), 86400);
-  } catch (e) {}
-  return items;
-}
-// 记录本次翻译所用通道（m2m100 / mymemory）
-let trVia = "\u2014";
-// 翻译通道统计（用于遥测诊断：AI 成功数 / MyMemory 成功数 / 全部失败数 / 首要报错）
-let trStats = { ai: 0, my: 0, err: 0, lastErr: "" };
-// 文本摘要哈希（base64 前缀）作为 KV 键名，足够避免碰撞且键短
-async function waitHash2(txt) {
-  if (!crypto || !crypto.subtle) return txt.slice(0, 32);
-  const b = new TextEncoder().encode(txt.replace(/\s+/g," ").trim());
-  const ab = await crypto.subtle.digest("SHA-256", b);
-  const buf = Array.from(new Uint8Array(ab));
-  const hex = buf.map(b=>b.toString(16).padStart(2,"0")).join("");
-  return hex.slice(0, 28);
-}
-// 翻译单段文本：优先 Cloudflare 原生 Workers AI m2m100（免密钥、走账号配额、不依赖外部服务），失败回退 MyMemory（keyless），再失败抛错由上层回退原文
-// 翻译成功后写入 KV 缓存缓存 7 天，避免重复翻译
-async function translateOne(env, text, dstLang) {
-  let aiErr = "";
-  const key = "tr:v1:" + await waitHash2(text);
-  let out = null;
-  if (env && env.AI) {
-    for (let at = 0; at < 2; at++) {
-      try {
-        const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text, source_lang: "english", target_lang: dstLang });
-        const raw = r && (r.translated_text || (r.result && r.result.translated_text) || (r.data && r.data.translated_text));
-        out = (raw || "").trim();
-        if (out) { trVia = "m2m100"; trStats.ai++; break; }
-        aiErr = aiErr || "\u7A7A\u8F93\u51FA";
-      } catch (e) {
-        aiErr = aiErr || String(e && e.message || e).slice(0, 120);
-        if (at === 0) await new Promise((rr) => setTimeout(rr, 400));
-      }
-    }
-  }
-  if (!out) {
-    const pair = dstLang === "chinese" ? "en|zh-CN" : "zh-CN|en";
-    const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(text) + "&langpair=" + pair;
-    const res = await fetchWithTimeout(url, { headers: { "User-Agent": DEFAULT_UA } }, 1, 15e3);
-    if (!res.ok) { trStats.err++; trStats.lastErr = trStats.lastErr || "myHTTP " + res.status; throw new Error("HTTP " + res.status); }
-    const j = await res.json().catch(() => null);
-    out = j && j.responseData && j.responseData.translatedText;
-    if (!out || !out.trim() || j.quotaFinished) { trStats.err++; trStats.lastErr = trStats.lastErr || "my" + (aiErr || "no result"); throw new Error("no result"); }
-    out = String(out).trim();
-    if (out) trVia = "mymemory"; trStats.my++;
-  }
-  if (out && env && env.KV) {
-    try { await env.KV.put(key, out, { expirationTtl: 7*24*3600 }); } catch (e) {}
-  }
-  return out;
-}
-__name(translateItems, "translateItems");
-__name2(translateItems, "translateItems");
 async function aiAnalyze(cfg, env, hotItems, rssItems) {
   const acfg = cfg.ai_analysis || {};
   const pool = [];
@@ -4281,39 +4059,10 @@ ${pool.join("\n")}`;
 }
 __name(aiAnalyze, "aiAnalyze");
 __name2(aiAnalyze, "aiAnalyze");
-// AI 整理自定义订阅（爆料类 Telegram 频道）：把本轮新内容去重、按主题精简整合出中文速览，避免逐条刷屏
-async function aiTidySubscriptions(cfg, env, subItems) {
-  const acfg = cfg.ai_analysis || {};
-  if (!aiAvailable(cfg, env)) return null;
-  const need = subItems.filter(it => it._zh || it._zhSummary);
-  if (need.length < 2) return null;
-  const pool = [];
-  need.slice(0, 40).forEach(it => {
-    const t = it._zh || it.title || "";
-    const s = it._zhSummary || it.description || it.summary || "";
-    const line = `- ${t}${s && s !== t ? " — " + s : ""}`;
-    pool.push(line);
-  });
-  if (pool.length === 0) return null;
-  const prompt = `以下是多个游戏爆料频道本轮抓取的新内容，请帮我整理：
-1. 去重：相同/相近的消息合并
-2. 分类：按主题归类（如「星穹铁道」「原神」「绝区零」「其他游戏」）
-3. 精简：每个主题用几句话说清楚关键爆料，不要保留每条原文，浓缩精炼；重点放在新内容、版本更新、新角色/皮肤、实机图、官方消息
-4. 语言：条理清晰的中文，不要英文，控制在 500 字以内
-
-当前爆料内容：
-${pool.join("\n")}`;
-  return await chat(cfg, env, [
-    { role: "system", content: "你是资深游戏内容整理助手，擅长把零散爆料整理成干净好读的速览。" },
-    { role: "user", content: prompt }
-  ], { max_tokens: 1200 });
-}
-__name(aiTidySubscriptions, "aiTidySubscriptions");
-__name2(aiTidySubscriptions, "aiTidySubscriptions");
 async function runPipeline(env, { trigger = "cron" } = {}) {
   const running = await readKV(env, RUNNING_KEY);
   if (running === "1") return { ok: true, running: true, message: "\u6D41\u6C34\u7EBF\u5DF2\u5728\u8FD0\u884C" };
-  await writeKV(env, RUNNING_KEY, "1", 900);
+  await writeKV(env, RUNNING_KEY, "1", 1800);
   try {
     const cfg = await getConfig(env);
     const tz = cfg.app.timezone || "Asia/Shanghai";
@@ -4521,11 +4270,6 @@ async function runPipeline(env, { trigger = "cron" } = {}) {
     const hasRss = matchedRss.length > 0;
     const hasAlways = rssAlways.length > 0;
     if (hasTop || hasHot || hasRss || hasAlways || cfg.ai_analysis.enabled && results.analysis) {
-      // 订阅/Telegram 英文内容翻译为中文（AI 失败回退原文）
-      const subItemsForTr = [...matchedRss.map((m) => m.item), ...rssAlways];
-      if (cfg.ai_translation && cfg.ai_translation.enabled) {
-        try { await translateItems(cfg, env, subItemsForTr, cfg.ai_translation.language); } catch (e) {}
-      }
       const data = {
         title: cfg.app.title || "Hot News \u70ED\u70B9\u901F\u9012",
         timeStr: nowMinuteStr(tz),
@@ -4537,45 +4281,10 @@ async function runPipeline(env, { trigger = "cron" } = {}) {
         analysis: results.analysis
       };
       const parts = renderParts(cfg, data);
-      // AI 整理自定义订阅：把本轮新订阅内容去重+归类成精炼中文速览，作为推送第一条（配置 ai_analysis.sub_digest=true 开启）
-      if (cfg.ai_analysis && cfg.ai_analysis.sub_digest && rssAlways && rssAlways.length) {
-        try {
-          const digest = await aiTidySubscriptions(cfg, env, rssAlways);
-          if (digest) {
-            const dtext = `\u3010\u8BA2\u9605\u901F\u89C8\u3011${nowMinuteStr(tz)}\n${digest}\n\n\u{1F916} \u6570\u636E\u6765\u6E90\uFF1AAI \u6574\u7406\u81EA\u5B9A\u4E49\u8BA2\u9605`;
-            parts.unshift({ type: "digest", text: dtext });
-          }
-        } catch (e) {
-          results.errors.push(`\u8BA2\u9605\u901F\u89C8: ${e.message}`);
-        }
-      }
       results.push = [];
-      // 企业微信通道支持"图片消息"，把 Telegram/热点图片直接推送为图片（每推 4 张封顶）
-      const wkChan = push_default.configuredChannels((cfg.notification || {}).channels || {}).find((c) => c.name === "wework");
-      let imgTotal = 0;
-      const imgSeen = new Set();
-      const imgFail = [];
       for (const part of parts) {
         const pr = await push_default.push(env, cfg, part.text);
         results.push.push(...pr);
-        if (wkChan && part.images && part.images.length) {
-          for (const u of part.images) {
-            if (imgTotal >= 4 || imgSeen.has(u)) continue;
-            imgSeen.add(u);
-            let ir;
-            try { ir = await sendWeworkImage(wkChan.cfg, u); }
-            catch (e) { ir = { ok: false, error: e.message, url: u }; }
-            if (ir && ir.ok) imgTotal++;
-            else if (ir) imgFail.push(ir.url || u);
-          }
-        }
-      }
-      results.imagesSent = imgTotal;
-      // 轻量遥测：记录图片直发结果，便于核对交付（不影响主流程）
-      try { await writeKV(env, "hotnews:last:imgs", JSON.stringify({ imagesSent: imgTotal, fail: imgFail, at: (/* @__PURE__ */ new Date()).toISOString() }), 86400); } catch (e) {}
-      if (imgFail.length) {
-        const note = "\u{1F5BC}\uFE0F \u4E0B\u5217\u56FE\u7247\u672A\u80FD\u76F4\u53D1\uFF0C\u8BF7\u70B9\u94FE\u63A5\u67E5\u770B\uFF1A\n" + imgFail.join("\n");
-        results.push.push(...(await push_default.push(env, cfg, note)));
       }
       results.partsCount = parts.length;
       results.totalItems = parts.reduce((s, p) => s + (p.itemsCount || 0), 0);
@@ -5859,7 +5568,6 @@ function parseTelegram(html, username) {
   const blockRe = /<div class="tgme_widget_message[^"]*"[^>]*data-post="([^"]+)"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g;
   const textRe = /<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/;
   const dateRe = /<time datetime="([^"]+)"/;
-  const imgRe = /<img[^>]+src="([^"]+)"[^>]*>|<video[^>]+poster="([^"]+)"[^>]*>|background-image:\s*url\(['"]?([^'")]+)['"]?\)/gi;
   let m;
   while ((m = blockRe.exec(html)) !== null) {
     const dataPost = m[1];
@@ -5873,46 +5581,12 @@ function parseTelegram(html, username) {
     const dm = block.match(dateRe);
     if (dm) pubDate = dm[1];
     const postLink = `https://t.me/${dataPost}`;
-    // 提取消息内真实配图直链。
-    // 重要：t.me 每条消息块顶部都有一个频道头像 <img class="tgme_widget_message_user_photo">，
-    // 若直接取第一个 img 会把"频道头像"当成配图（文字爆料也会被配个头像图）。
-    // 修正：先取真实媒体（视频封面 poster / 配图 photo_wrap 的 background-image），
-    // 再回退到非头像的大图；纯文字消息则不留图。
-    let image = "";
-    let vm = block.match(/<video[^>]+poster=["']([^"']+)["']/i);
-    if (vm) image = vm[1].replace(/&amp;/g, "&");
-    if (!image) {
-      // 配图：t.me 用 .tgme_widget_message_photo_wrap 的 background-image:url(...)。
-      // url() 内引号可能是字面 ' 或实体 &#39;/&quot;，故先把 url(...) 内容取出，再统一剥离引号与实体解码。
-      const pm = block.match(/background-image\s*:\s*url\(([^)]+)\)/i);
-      if (pm) {
-        let u = pm[1].trim().replace(/^['"\s]+|['"\s]+$/g, "").replace(/&#0?39;|&#x27;|&quot;/g, "").replace(/&amp;/g, "&");
-        if (/^https?:\/\//i.test(u)) image = u;
-      }
-    }
-    if (!image) {
-      // 兜底：仅接受"消息媒体图"（带 message_photo 触发器类名的 <img>）。
-      // 注意头像 <img> 无自己的 class（class 在外层 <i class=...user_photo>），故此处不会匹配到头像。
-      const imgRe2 = /<img([^>]+)>/gi;
-      let im2;
-      imgRe2.lastIndex = 0;
-      while ((im2 = imgRe2.exec(block)) !== null) {
-        const attrs = im2[1] || "";
-        const cm = attrs.match(/\bclass="([^"]*)"/i);
-        const sm = attrs.match(/\bsrc="([^"]+)"/i);
-        const cls = (cm && cm[1]) || "";
-        const u = (sm && sm[1]) || "";
-        if (/user_photo|avatar/i.test(cls)) continue;
-        if (/message_photo|photo_wrap/i.test(cls) && /^https?:\/\//i.test(u)) { image = u.replace(/&amp;/g, "&"); break; }
-      }
-    }
     items.push({
       title: text ? text.split("\n")[0].slice(0, 100) : `(媒体消息) @${username}`,
       url: postLink,
       link: postLink,
       guid: postLink,
       description: text ? text.replace(/\n/g, "<br>") : "",
-      image,
       pubDate
     });
   }

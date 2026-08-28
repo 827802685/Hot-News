@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hot-news 配置帮助</title>
+<style>
+:root{--fg:#e6e8ee;--muted:#9aa0b0;--accent:#818cf8;--border:rgba(255,255,255,.09);--green:#34d399;--red:#f87171;--yellow:#fbbf24}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:
+  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.20), transparent 60%),
+  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.16), transparent 55%),
+  radial-gradient(900px 700px at 50% 120%, rgba(34,211,238,.10), transparent 60%),
+  #0a0c12;color:var(--fg);font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.75;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+header{position:sticky;top:0;background:rgba(10,12,18,.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+header h1{font-size:17px;font-weight:600;background:linear-gradient(90deg,#a5b4fc,#e0e7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+header .ops a{font-size:13px;margin-left:12px}
+main{max-width:860px;margin:24px auto;padding:0 20px 40px}
+.card{background:rgba(24,28,38,.5);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.card h2{font-size:16px;margin-bottom:10px;color:#c7d2fe}
+.card h3{font-size:14px;margin:14px 0 6px;color:var(--fg)}
+.card p,.card li{color:var(--muted)}
+.card ul{padding-left:20px;margin:6px 0}
+.card li{margin:3px 0}
+code{background:rgba(13,16,23,.6);border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:12px;color:#a5b4fc}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:600}
+.step{background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.25);border-radius:10px;padding:12px 16px;margin:8px 0}
+.step b{color:#c7d2fe}
+.warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:10px 14px;margin:8px 0;color:var(--yellow);font-size:13px}
+.ok{color:var(--green)}
+.err{color:var(--red)}
+.hint{color:var(--muted);font-size:12px}
+#toc{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+#toc a{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:13px;color:var(--muted)}
+#toc a:hover{color:var(--accent);border-color:var(--accent);text-decoration:none}
+#theme-btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:4px 10px;font-size:13px;cursor:pointer}
+#theme-btn:hover{color:var(--fg)}
+html[data-theme="light"] body{background:
+  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.14), transparent 60%),
+  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.12), transparent 55%),
+  #f4f6fb;color:#1a1c23}
+html[data-theme="light"] header{background:rgba(255,255,255,.7);border-bottom-color:rgba(0,0,0,.08)}
+html[data-theme="light"] .card{background:rgba(255,255,255,.75);border-color:rgba(0,0,0,.08);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+html[data-theme="light"] .card h2{color:#4f46e5}
+html[data-theme="light"] .card p,html[data-theme="light"] .card li{color:#3f4756}
+html[data-theme="light"] code{background:#fff;border-color:rgba(0,0,0,.1);color:#4f46e5}
+html[data-theme="light"] th{color:#5b6472}
+html[data-theme="light"] th,html[data-theme="light"] td{border-bottom-color:rgba(0,0,0,.08)}
+html[data-theme="light"] .step{background:rgba(79,70,229,.08);border-color:rgba(79,70,229,.25)}
+html[data-theme="light"] .step b{color:#4f46e5}
+html[data-theme="light"] #toc a{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#5b6472}
+html[data-theme="light"] #theme-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#5b6472}
+</style>
+</head>
+<body>
+<header>
+  <h1>hot-news 配置帮助</h1>
+  <span class="ops"><a href="/">首页</a><a href="/setting">控制面板</a><a href="/setting/api/status">状态</a><button id="theme-btn" type="button">☀️</button></span>
+</header>
+<main>
+<nav id="toc">
+  <a href="#flow">整体流程</a>
+  <a href="#hotlist">热榜来源</a>
+  <a href="#rss">RSS 订阅</a>
+  <a href="#subs">自定义订阅</a>
+  <a href="#filter">筛选</a>
+  <a href="#ai">AI 配置</a>
+  <a href="#push">推送通道</a>
+  <a href="#qq">QQ 机器人</a>
+  <a href="#storage">存储与备份</a>
+  <a href="#schedule">定时与触发</a>
+  <a href="#retention">数据保留</a>
+</nav>
+
+<div class="card" id="flow">
+  <h2>整体流程</h2>
+  <p>每 15 分钟触发一次调度，按各模块自己的时间判断是否执行：</p>
+  <ul>
+    <li><b>抓取热榜</b>（按「间隔分钟」判断是否到点）→ 存 D1</li>
+    <li><b>拉取 RSS 订阅</b> → 解析新条目 → 存 D1</li>
+    <li><b>自定义订阅</b>（按各自拉取时间判断）</li>
+    <li><b>筛选</b>（关键词 / AI）→ 匹配今天的热榜与 RSS</li>
+    <li><b>AI 分析</b>（每天一次，输出每日总结）</li>
+    <li><b>推送</b> → 所有已配置且填好的通道</li>
+    <li><b>归档 &amp; 备份</b> → S3 原始数据 + 每日备份</li>
+  </ul>
+  <p class="hint">配置保存后立即生效；「立即运行」可手动触发一次完整流水线。</p>
+</div>
+
+<div class="card" id="hotlist">
+  <h2>热榜来源（热榜 Tab）</h2>
+  <p>内置 6 类平台模板：B站 / 微博 / 抖音 / 小红书 / Telegram / 自定义。逐条添加来源：</p>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>id</td><td>唯一标识，如 <code>bilibili</code>，用于分组与存档文件名</td></tr>
+    <tr><td>名称</td><td>首页显示的标题，如 <code>B站热门</code></td></tr>
+    <tr><td>域名校验</td><td>可选；抓取时校验响应域名，防伪造/改源</td></tr>
+  </table>
+  <div class="step"><b>抓取间隔</b>：整体控制（默认 60 分钟）。设为 15 则每轮调度都抓取。</div>
+  <p class="hint">抓取失败不会中断流水线，会在概览的错误列表里显示。</p>
+</div>
+
+<div class="card" id="rss">
+  <h2>RSS 订阅（RSS Tab）</h2>
+  <p>两种方式：</p>
+  <ul>
+    <li><b>从热榜平台添加</b>：直接在热榜 Tab 的平台里选，自动生成平台热榜 RSS，内容自动同步。</li>
+    <li><b>添加 Feed</b>：任意 RSS/Atom 源（id、名称、URL）。</li>
+  </ul>
+  <p>支持 <code>&lt;rss&gt;</code> 与 <code>&lt;feed&gt;</code> 两种格式，自动去重只入库新条目。</p>
+  <p>公开访问：平台热榜 RSS 为 <code>/rss/hot/{平台}.xml</code>（如 <code>/rss/hot/bilibili.xml</code>）；自定义 Feed 为 <code>/rss/{feed_id}.xml</code>；汇总页 <code>/rss</code>。</p>
+  <p class="hint">有些源需要 UA 或防反爬，抓取失败会在错误列表显示原因。</p>
+</div>
+
+<div class="card" id="subs">
+  <h2>自定义订阅（自定义订阅 Tab）</h2>
+  <p>两种订阅方式，统一进入「订阅必达/订阅更新」报告：</p>
+  <ul>
+    <li><b>热榜平台</b>：从热榜列表里直接选，订阅即生成 <code>/rss/hot/{平台}.xml</code>，内容来自热榜抓取。</li>
+    <li><b>网址 / RSS</b>：粘贴任意 RSS/Atom 或网页地址，自动识别解析。</li>
+  </ul>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>显示名称</td><td>订阅名，如 <code>早报</code></td></tr>
+    <tr><td>拉取时间点</td><td>每天执行的时刻，如 <code>08:00</code>；多个用逗号分隔；留空=随调度拉取</td></tr>
+  </table>
+  <p class="hint">旧版「平台类型」已移除：B站/抖音/微博等账号订阅的解析能力仍保留在服务器端，但面板统一为「热榜平台 + 网址」两种清晰方式。</p>
+</div>
+
+<div class="card" id="filter">
+  <h2>筛选（筛选 Tab）</h2>
+  <p>决定哪些新闻进报告/推送：</p>
+  <ul>
+    <li><b>关键词模式</b>（默认）：标题命中关键词即入选，<code>排名高亮阈值</code> 控制排在前几名的重点标色</li>
+    <li><b>AI 模式</b>：按「兴趣描述」让 AI 打分，高于「最低分数」入选</li>
+  </ul>
+  <div class="step"><b>关键词</b>每行一个，回车分隔；<code>max_news_per_keyword</code> 限制每个关键词最多几条。</div>
+</div>
+
+<div class="card" id="ai">
+  <h2>AI 配置（AI Tab）</h2>
+  <p>默认使用 <b>Cloudflare Workers AI</b>（无需任何 Key，用账户额度，每天分析一次）。</p>
+  <table>
+    <tr><th>通道</th><th>说明</th></tr>
+    <tr><td>workers-ai</td><td>默认。模型名填 <code>@cf/meta/llama-3.1-8b-instruct</code>；可用模型见 Cloudflare 控制台 Workers AI</td></tr>
+    <tr><td>openai</td><td>外部 API（DeepSeek/OpenAI 等）：填 <code>api_base</code> + <code>api_key</code> + <code>model</code></td></tr>
+  </table>
+  <ul>
+    <li><b>AI 每日分析</b>：每天第一次调度时对当日热点生成总结，随推送发出</li>
+    <li><b>AI 筛选</b>：筛选 Tab 选「AI 模式」后生效</li>
+    <li>「检查 AI 可用性」按钮可实时验证配置</li>
+  </ul>
+</div>
+
+<div class="card" id="push">
+  <h2>推送通道（推送 Tab）</h2>
+  <p>共 10 个通道，<b>填好配置即自动启用</b>（不需要单独开关，总开关控制全部）。</p>
+  <table>
+    <tr><th>通道</th><th>需要的配置</th><th>获取方式</th></tr>
+    <tr><td>飞书 Feishu</td><td>Webhook URL</td><td>飞书群 → 添加「自定义机器人」→ 复制 webhook</td></tr>
+    <tr><td>钉钉 DingTalk</td><td>Webhook URL</td><td>钉钉群 → 智能群助手 → 自定义机器人 → 加签选「无」</td></tr>
+    <tr><td>企业微信 Wework</td><td>Webhook URL + 消息类型</td><td>企业微信群 → 群机器人 → 复制 webhook</td></tr>
+    <tr><td>Telegram</td><td>Bot Token + Chat ID</td><td>@BotFather 建 Bot；给 @userinfobot 发消息拿 Chat ID</td></tr>
+    <tr><td>邮件 Email</td><td>Resend API Key + 发件人 + 收件人</td><td>resend.com 注册 → API Keys；发件人可先用 <code>onboarding@resend.dev</code> 测试</td></tr>
+    <tr><td>ntfy</td><td>Topic（可选服务器/Token）</td><td>ntfy.sh 任意 topic 名即可订阅</td></tr>
+    <tr><td>Bark</td><td>URL</td><td>iOS 安装 Bark → 复制推送地址</td></tr>
+    <tr><td>Slack</td><td>Webhook URL</td><td>Slack App → Incoming Webhooks</td></tr>
+    <tr><td>通用 Webhook</td><td>URL + JSON 模板</td><td>任意支持 POST 的接口；模板占位符 <code>{title}</code> <code>{content}</code></td></tr>
+    <tr><td>QQ 官方机器人</td><td>AppID + AppSecret + 目标</td><td>见下方「QQ 机器人」专节</td></tr>
+  </table>
+  <div class="warn">「发送测试」会先自动保存当前表单，再向所有已启用通道发一条测试消息；失败会显示具体原因。</div>
+</div>
+
+<div class="card" id="qq">
+  <h2>QQ 官方机器人（图文教程）</h2>
+  <p>QQ 推送用的是 <b>QQ 官方机器人</b>（q.qq.com），不是 QQ 互联（connect.qq.com，那个只能做 QQ 登录）。</p>
+
+  <h3>一、注册机器人</h3>
+  <div class="step"><b>1.</b> 打开 <code>https://q.qq.com</code>，注册开发者（个人主体即可）</div>
+  <div class="step"><b>2.</b> 必须完成「<b>超级管理员绑定</b>」：填姓名、身份证号、手机号（需与运营商实名一致）→ 用本人 QQ 扫码 → 人脸验证。绑定完才能继续</div>
+  <div class="step"><b>3.</b> 应用管理 → <b>创建机器人</b> → 填写资料 → 拿到 <code>AppID</code> 和 <code>AppSecret</code></div>
+
+  <h3>二、配置事件回调</h3>
+  <div class="step"><b>4.</b> 机器人管理端 → 开发设置 → 事件订阅 → 选「Webhook 回调」→ 地址填：<code>https://news.zjkl.qzz.io/qq/event</code></div>
+  <div class="step"><b>5.</b> 订阅事件：勾选「<b>C2C 消息事件</b>」（私聊）和「<b>群聊消息事件</b>」（以后拉群用）</div>
+
+  <h3>三、获取 openid 并测试</h3>
+  <div class="step"><b>6.</b> 在 QQ 里给机器人发一条私聊消息（如「hi」）</div>
+  <div class="step"><b>7.</b> 面板 → 推送 → QQ 卡片 → 点「<b>刷新 openid</b>」→ 复制「单聊: 一串id」</div>
+  <div class="step"><b>8.</b> 目标类型选「<b>单聊（私聊）</b>」，目标 ID 填那串 openid，保存 → 发送测试</div>
+
+  <div class="warn">单聊主动消息仅限「最近 48h 内有互动」的用户，所以先发消息、再立刻测试。</div>
+  <div class="warn">测试报 <code>QQ 11294</code> 等错误码时，把错误码记下来对照 QQ 官方文档；常见原因：机器人未入群/未发过消息、openid 填错、能力未开通。</div>
+
+  <h3>目标类型说明</h3>
+  <table>
+    <tr><th>类型</th><th>目标 ID 填什么</th><th>前提</th></tr>
+    <tr><td>单聊（c2c）</td><td>用户的 <code>user_openid</code>（刷新自动记录）</td><td>对方 48h 内有互动</td></tr>
+    <tr><td>群</td><td>群 <code>group_openid</code>（群里有人发言后自动记录）</td><td>机器人已入群</td></tr>
+    <tr><td>频道</td><td>频道的 <code>channel_id</code>（数字）</td><td>机器人已加入频道</td></tr>
+  </table>
+</div>
+
+<div class="card" id="storage">
+  <h2>存储与备份（存储备份 Tab）</h2>
+  <h3>S3 兼容对象存储</h3>
+  <p>用于原始数据归档 + 每日备份。以 Cloudflare R2 为例：</p>
+  <ul>
+    <li>控制台 → R2 → 创建存储桶 → 拿到 Endpoint（<code>https://xxx.r2.cloudflarestorage.com</code>）、Bucket 名</li>
+    <li>创建 API Token（编辑对象存储）→ 拿 Access Key / Secret Key</li>
+    <li>Region 填 <code>auto</code></li>
+  </ul>
+  <h3>每日备份</h3>
+  <p>到点把当日全量数据导出为 <code>full.json</code> + 报告 <code>report.md</code> 上传到 <code>/Daily backup/YYYY-MM-DD/</code>。保留天数自动清理旧备份。</p>
+  <p class="hint">不配置 S3 也能正常跑（只用 D1 存储），只是没有对象存储归档。</p>
+</div>
+
+<div class="card" id="schedule">
+  <h2>定时与触发（高级 Tab）</h2>
+  <ul>
+    <li><b>定时调度</b>：固定每 15 分钟一次（<code>*/15 * * * *</code>），各模块内部判断是否到点</li>
+    <li><b>手动触发</b>：概览页「立即运行」；或给 <code>POST /api/pull</code> 带请求头 <code>X-Pull-Key: 密钥</code>（可在高级 Tab 设置），适合外部 cron 调用</li>
+    <li><b>站点标题 / 时区</b>：影响首页标题与日期显示</li>
+  </ul>
+</div>
+
+<div class="card" id="retention">
+  <h2>数据保留</h2>
+  <p>D1 里热榜与 RSS 数据按天分区，超过保留天数（默认各 30 天）会被自动清理。想保留更久就调大天数；S3 备份不占用 D1 配额。</p>
+</div>
+
+</main>
+<script>
+(function () {
+  var btn = document.getElementById('theme-btn');
+  if (!btn) return;
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    btn.textContent = t === 'light' ? '🌙' : '☀️';
+    try { localStorage.setItem('hotnews_theme', t); } catch (e) {}
+  }
+  var saved = 'dark';
+  try { saved = localStorage.getItem('hotnews_theme') || 'dark'; } catch (e) {}
+  btn.addEventListener('click', function () {
+    applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  applyTheme(saved);
+})();
+</script>
+</body>
+</html>
+--207b85bda809dcb2a60454af3fcb6c14a59665bfc115b4fd3326b69249cf--
