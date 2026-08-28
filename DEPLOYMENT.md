@@ -2,6 +2,14 @@
 
 本目录是 **`news.zjkl.qzz.io`（hot-news Worker）当前线上运行版本**的完整快照，用于版本可回溯与故障回滚。
 
+## 2026-08-28 十三次改动（配图"还是有头像"根治：历史残留图清空·已部署）
+
+> 用户反馈十二次改动的配图修复上线后"还是有"频道头像图。`parseTelegram` 修复本身正确（纯文字消息不再抓头像、配图消息取真实媒体），但**推送图片来自数据库 `rss_items.image`**，而 `upsertRssItems` 的更新逻辑为 `image = CASE WHEN excluded.image IS NOT NULL AND excluded.image != '' THEN excluded.image ELSE rss_items.image END`——即新值空则保留旧值。修复版对纯文字消息解析出空 image，数据库里历史误存（修复上线前）的频道头像 URL 永远不会被清除，推送 `renderParts` 时 `it.image` 非空仍将头像带出，故"还是有"。本次改为 `image = excluded.image`（总是采用本次抓取值，空则清空），一次性根治。
+
+1. **数据库残留图清空**（`upsertRssItems`）：冲突更新时 `image = excluded.image`（去掉"新值空保留旧值"的 CASE），使修复版解析的"纯文字无图"能覆盖并清库中旧头像 URL；配图消息仍写入真实媒体 URL。
+2. **线上实时诊断辅助**（`RSS2_TEMPLATE`）：RSS 条目新增 `{{#image}}<image>…` 渲染，便于通过 `/rss/telegram/channel/<user>` 核对线上实际解析出的 image。
+3. **部署与落地**：deployment `65a38a9ff90f4b3d91dfd126298006b2`（tag `949dfb1f…`，etag `f157e126…`，modified_on `2026-08-28T10:20:37Z`）已上线。线上 `/rss/telegram/channel/FireflyLeak` 实测：带图消息返回真实 `cdn*.telesco.pe/file/...` 配图，纯文字消息 `<image>` 为空，不再有频道头像。随后清空今日 178 行旧头像脏数据、触发手动流水线重建 —— 数据库 6 个 tg 频道 `with_img` 由 40/25/23/16/18/20 降至 9/4/8/2/9/17（仅真配图保留），推送遥测 `hotnews:last:imgs` 显示 `imagesSent:4, fail:[]`；全文翻译 `cacheHit:119` 命中无需重构。流水线锁批量复位为 `0`。
+
 ## 2026-08-28 十二次改动（复推成功/翻译缓存/配图修复/AI 订阅速览·当前线上）
 
 > 十一次改动后在线上发现"推送中断"（用户反馈"怎么不发了"）：每 15 分钟 cron 会把约 119 条英文 Telegram 订阅内容重复翻译，导致单次 Worker 调用 subrequest 数远超默认上限，运行被平台强杀（`Too many subrequests by single Worker invocation`），推送 `wework ok:false`，且流水线锁 `hotnews:pipeline:running` 残留为 `1` 阻塞后续调度。本次一并修复并新增功能。

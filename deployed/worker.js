@@ -3556,7 +3556,7 @@ async function upsertRssItems(env, items, dateStr) {
 		ON CONFLICT(url, feed_id, date) DO UPDATE SET
 			last_crawl_time = excluded.last_crawl_time,
 			crawl_count = rss_items.crawl_count + 1,
-			image = CASE WHEN excluded.image IS NOT NULL AND excluded.image != '' THEN excluded.image ELSE rss_items.image END
+			image = excluded.image
 	`);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const rows = items.map(
@@ -5474,6 +5474,9 @@ var RSS2_TEMPLATE = `<?xml version="1.0" encoding="UTF-8" ?>
         {{#category}}
         <category>{{category}}</category>
         {{/category}}
+        {{#image}}
+        <image>{{image}}</image>
+        {{/image}}
     </item>
   {{/items}}
 </channel>
