@@ -1,0 +1,1 @@
+import{d as o,g as t,l as e,y as r}from"../../../nitro/nitro.mjs";import"node:process";import"node:events";import"node:buffer";import"node:timers";import"node:string_decoder";import"node:util";const n=o((async o=>{var n;const i=(null==(n=o.context.cloudflare)?void 0:n.env)||globalThis.__env__||{},s=t(i),a=await e(s);return await r(a,i,s)}));export{n as default};

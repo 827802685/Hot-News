@@ -4,9 +4,11 @@ import { jwtVerify } from "jose"
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   if (!url.pathname.startsWith("/api")) return
+  // 不依赖 GitHub 登录的路径：公开卡片墙 + 管理员控制面板（后者由 admin middleware 鉴权）
+  const noGitHubAuth = ["/api/s", "/api/proxy", "/api/latest", "/api/admin", "/api/config", "/api/sources", "/api/pipeline", "/api/custom-sources"]
   if (["JWT_SECRET", "G_CLIENT_ID", "G_CLIENT_SECRET"].find(k => !process.env[k])) {
     event.context.disabledLogin = true
-    if (["/api/s", "/api/proxy", "/api/latest"].every(p => !url.pathname.startsWith(p)))
+    if (noGitHubAuth.every(p => !url.pathname.startsWith(p)))
       throw createError({ statusCode: 506, message: "Server not configured, disable login" })
   } else {
     if (["/api/s", "/api/me"].find(p => url.pathname.startsWith(p))) {

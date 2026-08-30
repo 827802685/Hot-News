@@ -23,6 +23,10 @@ database_id = "12a7a8d3-f464-4789-a80a-130e689cb44e"
 binding = "KV"
 id = "422b526e3ecf4fada2b583d0442ff6d3"
 
+# ---- Workers AI（免费账户可用免费模型）----
+[ai]
+binding = "AI"
+
 [vars]
 AI_API_BASE = "https://api.deepseek.com/v1"
 AI_API_KEY = ""

@@ -1,0 +1,1 @@
+import{d as o,n as t}from"../../nitro/nitro.mjs";import"node:process";import"node:events";import"node:buffer";import"node:timers";import"node:string_decoder";import"node:util";const e=o((async()=>({enable:!0,url:`https://github.com/login/oauth/authorize?client_id=${t.env.G_CLIENT_ID}`})));export{e as default};

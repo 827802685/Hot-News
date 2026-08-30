@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hot-news 控制面板</title>
+<style>
+:root{
+  --bg:#f6f7fb; --bg2:#fff; --card:#fff; --border:#e6e8f0; --fg:#1a1d27; --muted:#6b7280;
+  --accent:#4f6ef2; --accent-weak:rgba(79,110,242,.1); --green:#16a34a; --red:#dc2626; --yellow:#d97706;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b0d14; --bg2:#10131d; --card:#12151f; --border:#232838; --fg:#e7e9f0; --muted:#8b90a0;
+    --accent:#7c93ff; --accent-weak:rgba(124,147,255,.14); --green:#34d399; --red:#f87171; --yellow:#fbbf24;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+button{font:inherit;cursor:pointer;color:var(--fg)}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+textarea{resize:vertical;min-height:72px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.btn{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:8px 16px;font-weight:600}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--fg)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn.danger{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn.sm{padding:4px 10px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+#auth-view{max-width:340px;margin:110px auto;padding:28px;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.06)}
+#auth-view h1{font-size:20px;margin-bottom:18px;text-align:center}
+#auth-view .field{margin-bottom:12px}
+#auth-view .btn{width:100%}
+.err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
+.hint{color:var(--muted);font-size:12px;text-align:center;margin-top:12px}
+
+#app-view{display:none}
+.layout{display:flex;min-height:100vh}
+.side{width:196px;flex-shrink:0;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 10px;position:sticky;top:0;height:100vh}
+.side .brand{font-weight:700;font-size:15px;padding:2px 8px;letter-spacing:.2px}
+.side .brand em{font-style:normal;background:linear-gradient(90deg,var(--accent),#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:14px;flex:1;overflow-y:auto}
+.nav button{padding:9px 10px;border-radius:8px;color:var(--muted);border:0;background:transparent;text-align:left}
+.nav button:hover{background:var(--accent-weak);color:var(--fg)}
+.nav button.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.side-foot{border-top:1px solid var(--border);padding-top:10px;margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.side-foot .user{color:var(--muted);font-size:12px;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+main{flex:1;max-width:960px;margin:0 auto;padding:24px 20px;min-width:0}
+.panel{display:none}
+.panel.active{display:block}
+.panel h2{font-size:17px;margin-bottom:2px}
+.panel .desc{color:var(--muted);font-size:12.5px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px}
+.card h3{font-size:13.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h3 .tag{font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-weak);border-radius:6px;padding:1px 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.field{margin-bottom:12px}
+.switch{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.switch label{margin:0}
+.switch input{width:auto}
+.row{display:flex;gap:10px;align-items:flex-end}
+.row .field{flex:1;margin-bottom:0}
+.actions{margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--muted);word-break:break-all}
+code{background:var(--bg2);padding:1px 6px;border-radius:5px;font-size:12px;border:1px solid var(--border)}
+.badge{display:inline-block;background:var(--accent-weak);color:var(--accent);border-radius:6px;padding:2px 9px;font-size:12px}
+.ok{color:var(--green)}.err2{color:var(--red)}.warn{color:var(--yellow)}
+.status-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:7px;font-size:13px}
+.item-list{margin-top:6px}
+.item-row{display:flex;gap:8px;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;flex-wrap:wrap}
+.item-row input,.item-row select{width:auto;flex:1;min-width:110px}
+.item-row .del{background:transparent;border:0;color:var(--red);font-size:15px;cursor:pointer;padding:0 4px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 16px;box-shadow:0 8px 30px rgba(0,0,0,.14);z-index:99;display:none;max-width:82%;font-size:13px}
+#toast.show{display:block}
+#toast.ok{border-color:var(--green);color:var(--green)}
+#toast.err{border-color:var(--red);color:var(--red)}
+hr{border:0;border-top:1px solid var(--border);margin:16px 0}
+h4{margin:14px 0 8px;color:var(--muted);font-size:12.5px}
+.kv{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12.5px}
+@media (max-width:720px){
+  .layout{flex-direction:column}
+  .side{width:100%;height:auto;position:sticky;top:0;flex-direction:row;align-items:center;gap:8px;padding:8px 10px;overflow-x:auto;z-index:10;border-right:0;border-bottom:1px solid var(--border)}
+  .side .brand{font-size:13px;white-space:nowrap}
+  .nav{flex-direction:row;gap:2px;margin-top:0;flex:1;overflow-x:auto;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .nav button{white-space:nowrap;font-size:12.5px;padding:7px 9px}
+  .side-foot{flex-direction:row;gap:6px;margin-top:0;padding-top:0;padding-left:6px;border-top:0;border-left:1px solid var(--border)}
+  .side-foot .user{display:none}
+  main{margin:0;padding:14px 12px}
+  .grid{grid-template-columns:1fr}
+  .row{flex-direction:column;align-items:stretch}
+  .item-row input,.item-row select{min-width:0}
+}
+</style>
+</head>
+<body>
+
+<div id="auth-view">
+  <h1>hot-news</h1>
+  <div id="auth-form">
+    <div class="field"><label>邮箱</label><input id="a-email" type="text" placeholder="you@example.com" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input id="a-password" type="password" placeholder="至少 6 位" autocomplete="current-password"></div>
+    <button class="btn" id="a-btn">登录</button>
+    <div class="err" id="a-err"></div>
+  </div>
+</div>
+
+<div id="app-view" class="layout">
+<aside class="side">
+  <span class="brand"><em>hot-news</em></span>
+  <nav class="nav">
+    <button class="active" data-tab="overview">概览</button>
+    <button data-tab="hotlist">热榜</button>
+    <button data-tab="subs">订阅源</button>
+    <button data-tab="filter">筛选</button>
+    <button data-tab="urgent">紧急消息</button>
+    <button data-tab="report">日报 / 周报</button>
+    <button data-tab="ai">AI</button>
+    <button data-tab="push">推送</button>
+    <button data-tab="advanced">高级</button>
+  </nav>
+  <div class="side-foot">
+    <span class="user" id="user-email"></span>
+    <button class="btn ghost sm" onclick="location.href='/'">查看首页</button>
+    <button class="btn ghost sm" onclick="doLogout()">退出</button>
+  </div>
+</aside>
+
+<main>
+<!-- 概览 -->
+<div class="panel active" id="panel-overview">
+  <h2>运行概览</h2>
+  <p class="desc">统一管线每 15 分钟一轮：抓取 → 紧急消息研判（命中即推）→ 四时段整合 → 日报/周报。</p>
+  <div class="card">
+    <h3>运行状态</h3>
+    <div class="status-row"><span>管线状态：</span><span id="ov-running">…</span></div>
+    <div class="status-row"><span>上次运行：</span><span class="mono" id="ov-lastrun">-</span></div>
+    <div class="status-row"><span>上次紧急推送：</span><span class="mono" id="ov-lasturgent">-</span></div>
+    <div class="status-row"><span>定时：</span><code>*/15 * * * *</code>　<span class="mono">四时段 08/12/17/20 点</span></div>
+    <div class="actions">
+      <button class="btn sm" onclick="runPipeline()">▶ 立即运行管线</button>
+      <button class="btn ghost sm" onclick="runUrgent()">🚨 立即检查紧急消息</button>
+      <button class="btn ghost sm" onclick="pushReport('daily')">📅 推送日报</button>
+      <button class="btn ghost sm" onclick="pushReport('weekly')">🗓 推送周报</button>
+      <button class="btn ghost sm" onclick="testPush()">测试推送</button>
+      <button class="btn ghost sm" onclick="loadOverview()">刷新</button>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>最近推送</h3><div id="ov-pushes" class="mono"></div></div>
+    <div class="card"><h3>最近抓取</h3><div id="ov-crawls" class="mono"></div></div>
+  </div>
+</div>
+
+<!-- 热榜 -->
+<div class="panel" id="panel-hotlist">
+  <h2>热榜抓取</h2>
+  <p class="desc">来自 newsnow 内置抓取器，来源列表可增删。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>基本设置</h3>
+      <div class="switch"><input type="checkbox" data-path="platforms.enabled"><label>启用热榜抓取</label></div>
+      <div class="field"><label>抓取间隔（分钟）</label><input type="number" data-path="platforms.interval_minutes"></div>
+    </div>
+    <div class="card">
+      <h3>来源列表</h3>
+      <div id="sources-list" class="item-list"></div>
+      <button class="btn ghost sm" onclick="addSource()">+ 添加来源</button>
+    </div>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存热榜配置</button></div>
+</div>
+
+<!-- 订阅源 -->
+<div class="panel" id="panel-subs">
+  <h2>订阅源</h2>
+  <p class="desc">自定义源（RSS / Telegram），启用后参与抓取、推送与紧急研判。</p>
+  <div class="card">
+    <h3>添加订阅</h3>
+    <div class="row">
+      <div class="field"><label>类型</label><select id="sub-kind"><option value="rss">RSS / Atom</option><option value="telegram">Telegram</option><option value="custom">自定义</option></select></div>
+      <div class="field"><label>地址</label><input id="sub-url" type="text" placeholder="https://example.com/atom.xml 或 t.me/s/xxx"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="field"><label>显示名称（可选）</label><input id="sub-name" type="text" placeholder="留空自动生成"></div>
+      <div class="field"><label>拉取时段（HH:MM 逗号分隔）</label><input id="sub-times" type="text" placeholder="如 08:00,20:00"></div>
+      <button class="btn" onclick="addSubscription()">添加</button>
+    </div>
+  </div>
+  <div class="card"><h3>我的订阅</h3><div id="subs-list"></div></div>
+</div>
+
+<!-- 筛选 -->
+<div class="panel" id="panel-filter">
+  <h2>内容筛选</h2>
+  <p class="desc">关键词模式零成本；AI 模式更灵活但消耗 token。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>筛选方式</h3>
+      <div class="field"><label>方法</label><select data-path="filter.method"><option value="keyword">关键词匹配</option><option value="ai">AI 智能筛选</option></select></div>
+      <div class="field"><label>每关键词最多条数</label><input type="number" data-path="filter.max_news_per_keyword"></div>
+      <div class="field"><label>排名高亮阈值</label><input type="number" data-path="filter.rank_threshold"></div>
+      <div class="field"><label>关键词（每行一个）</label><textarea data-path="filter.keywords" data-array="true"></textarea></div>
+      <div class="field"><label>AI 兴趣描述</label><textarea data-path="filter.interests"></textarea></div>
+      <div class="field"><label>AI 最低分数（0~1）</label><input type="number" step="0.05" data-path="filter.min_score"></div>
+    </div>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存筛选配置</button></div>
+</div>
+
+<!-- 紧急消息 -->
+<div class="panel" id="panel-urgent">
+  <h2>紧急消息 <span class="tag">即时推送</span></h2>
+  <p class="desc">每 15 分钟由 AI 按下方「关注类型」研判新入库新闻，命中紧急（分数达标）立即推送到所有已配置渠道，同一条当天不重复推。</p>
+  <div class="card">
+    <h3>开关</h3>
+    <div class="switch"><input type="checkbox" data-path="urgent.enabled"><label>启用紧急消息即时推送</label></div>
+    <div class="field"><label>AI 判定紧急的最低分数（0~1，建议 0.8）</label><input type="number" step="0.05" data-path="urgent.min_score"></div>
+    <div class="field"><label>每轮最多推送条数</label><input type="number" data-path="urgent.max_per_round"></div>
+  </div>
+  <div class="card">
+    <h3>关注的紧急类型</h3>
+    <p class="desc">每行一个。AI 会按这些主题判断是否「突发/紧急」，如：重大突发事件、股市异动、重大科技发布、时政要闻、游戏爆料。</p>
+    <textarea id="urgent-types" data-path="urgent.types" data-array="true"></textarea>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存紧急消息配置</button><button class="btn ghost" onclick="runUrgent()">立即检查一次</button></div>
+</div>
+
+<!-- 日报 / 周报 -->
+<div class="panel" id="panel-report">
+  <h2>日报 / 周报</h2>
+  <p class="desc">保留的定时报告，均带 AI 总结；与紧急消息共用去重。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>报告样式</h3>
+      <div class="field"><label>报告模式</label><select data-path="report.mode"><option value="current">当前榜单</option><option value="daily">当日汇总</option><option value="incremental">增量监控</option></select></div>
+      <div class="field"><label>分组维度</label><select data-path="report.display_mode"><option value="keyword">按关键词</option><option value="platform">按平台</option></select></div>
+      <div class="field"><label>今日焦点条数</label><input type="number" data-path="report.top_count"></div>
+    </div>
+    <div class="card">
+      <h3>定时日报</h3>
+      <div class="switch"><input type="checkbox" data-path="report.daily.enabled"><label>启用日报</label></div>
+      <div class="field"><label>日报时间（HH:MM）</label><input type="text" data-path="report.daily.time" placeholder="21:00"></div>
+      <h3>定时周报</h3>
+      <div class="switch"><input type="checkbox" data-path="report.weekly.enabled"><label>启用周报</label></div>
+      <div class="field"><label>周报星期</label><select data-path="report.weekly.day"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></div>
+      <div class="field"><label>周报时间（HH:MM）</label><input type="text" data-path="report.weekly.time" placeholder="20:00"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>分类（推送板块）</h3>
+    <div class="field"><label>分类（逗号分隔）</label><input type="text" data-path="report.categories" data-array-csv="true"></div>
+    <p class="hint">分类关键词在「AI」页暂不提供图形化编辑，保留默认即可。</p>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存报告配置</button></div>
+</div>
+
+<!-- AI -->
+<div class="panel" id="panel-ai">
+  <h2>AI 配置</h2>
+  <p class="desc">默认使用 Cloudflare Workers AI 免费模型（无需 Key）；也可切换为任意 OpenAI 兼容 API（DeepSeek / OpenAI / Ollama）。</p>
+  <div class="grid">
+    <div class="card">
+      <h3>模型</h3>
+      <div class="switch"><input type="checkbox" data-path="ai.enabled"><label>启用 AI（筛选/紧急/总结/翻译共用）</label></div>
+      <div class="field"><label>服务提供商</label>
+        <select data-path="ai.provider">
+          <option value="workersai">Cloudflare Workers AI（免费）</option>
+          <option value="openai">OpenAI 兼容 API</option>
+        </select>
+      </div>
+      <div class="field"><label>模型名（workersai 用 @cf/...，如 @cf/meta/llama-3.1-8b-instruct）</label><input type="text" data-path="ai.model" placeholder="@cf/meta/llama-3.1-8b-instruct"></div>
+      <div class="field"><label>API 地址（仅 OpenAI 兼容模式，base_url）</label><input type="text" data-path="ai.base_url" placeholder="https://api.deepseek.com/v1"></div>
+      <div class="field"><label>API Key（仅 OpenAI 兼容模式）</label><input type="password" data-path="ai.api_key" autocomplete="new-password"></div>
+      <div class="field"><label>温度</label><input type="number" step="0.1" data-path="ai.temperature"></div>
+      <div class="field"><label>最大 tokens</label><input type="number" data-path="ai.max_tokens"></div>
+    </div>
+    <div class="card">
+      <h3>AI 每日分析</h3>
+      <div class="switch"><input type="checkbox" data-path="ai_analysis.enabled"><label>启用 AI 每日分析</label></div>
+      <div class="field"><label>语言</label><input type="text" data-path="ai_analysis.language"></div>
+      <div class="field"><label>参与分析新闻数上限</label><input type="number" data-path="ai_analysis.max_news_for_analysis"></div>
+      <div class="switch"><input type="checkbox" data-path="ai_analysis.include_rss"><label>包含订阅内容</label></div>
+      <hr>
+      <h3>AI 翻译</h3>
+      <div class="switch"><input type="checkbox" data-path="ai_translation.enabled"><label>启用英文→中文翻译</label></div>
+      <div class="field"><label>目标语言</label><input type="text" data-path="ai_translation.language"></div>
+    </div>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存 AI 配置</button><button class="btn ghost" onclick="checkAi()">检查 AI 可用性</button><span id="ai-check" class="mono"></span></div>
+</div>
+
+<!-- 推送 -->
+<div class="panel" id="panel-push">
+  <h2>推送通知</h2>
+  <p class="desc">共 10 个通道，填好配置即自动启用；关闭总开关后全部停止。</p>
+  <div class="switch" style="margin-bottom:14px"><input type="checkbox" data-path="notification.enabled"><label>启用推送（总开关）</label></div>
+  <div class="grid" id="push-grid">
+    <div class="card"><h3>飞书 Feishu</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.feishu.webhook_url"></div></div>
+    <div class="card"><h3>钉钉 DingTalk</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.dingtalk.webhook_url"></div></div>
+    <div class="card"><h3>企业微信</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.wework.webhook_url"></div>
+      <div class="field"><label>消息类型</label><select data-path="notification.channels.wework.msg_type"><option value="markdown">markdown</option><option value="text">text</option></select></div></div>
+    <div class="card"><h3>Telegram</h3><div class="field"><label>Bot Token</label><input type="password" data-path="notification.channels.telegram.bot_token" autocomplete="new-password"></div>
+      <div class="field"><label>Chat ID</label><input type="text" data-path="notification.channels.telegram.chat_id"></div></div>
+    <div class="card"><h3>邮件 Email（Resend）</h3><div class="field"><label>Resend API Key</label><input type="password" data-path="notification.channels.email.resend_api_key" autocomplete="new-password"></div>
+      <div class="field"><label>发件人</label><input type="text" data-path="notification.channels.email.from" placeholder="HotNews &lt;onboarding@resend.dev&gt;"></div>
+      <div class="field"><label>收件人（逗号分隔）</label><input type="text" data-path="notification.channels.email.to"></div></div>
+    <div class="card"><h3>ntfy</h3><div class="field"><label>服务器</label><input type="text" data-path="notification.channels.ntfy.server_url"></div>
+      <div class="field"><label>Topic</label><input type="text" data-path="notification.channels.ntfy.topic"></div>
+      <div class="field"><label>Token（可选）</label><input type="password" data-path="notification.channels.ntfy.token" autocomplete="new-password"></div></div>
+    <div class="card"><h3>Bark</h3><div class="field"><label>URL</label><input type="text" data-path="notification.channels.bark.url" placeholder="https://api.day.app/yourkey"></div></div>
+    <div class="card"><h3>Slack</h3><div class="field"><label>Webhook URL</label><input type="text" data-path="notification.channels.slack.webhook_url"></div></div>
+    <div class="card"><h3>通用 Webhook</h3><div class="field"><label>URL</label><input type="text" data-path="notification.channels.generic_webhook.webhook_url"></div>
+      <div class="field"><label>JSON 模板（{title}/{content}）</label><input type="text" data-path="notification.channels.generic_webhook.payload_template" placeholder='{"content":"{content}"}'></div></div>
+    <div class="card"><h3>QQ 官方机器人</h3><div class="field"><label>App ID</label><input type="text" data-path="notification.channels.qq.app_id"></div>
+      <div class="field"><label>App Secret</label><input type="password" data-path="notification.channels.qq.app_secret" autocomplete="new-password"></div>
+      <div class="field"><label>目标类型</label><select data-path="notification.channels.qq.target_type"><option value="group">群</option><option value="channel">频道</option><option value="c2c">单聊（私聊）</option></select></div>
+      <div class="field"><label>目标 ID（openid）</label><input type="text" data-path="notification.channels.qq.target_id" placeholder="c2c/群：openid；频道：channel_id"></div>
+      <p class="hint">保留渠道，将来使用。</p></div>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存推送配置</button><button class="btn ghost" onclick="testPush()">发送测试</button></div>
+</div>
+
+<!-- 高级 -->
+<div class="panel" id="panel-advanced">
+  <h2>高级设置</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>应用</h3>
+      <div class="field"><label>站点标题</label><input type="text" data-path="app.title"></div>
+      <div class="field"><label>时区</label><input type="text" data-path="app.timezone" placeholder="Asia/Shanghai"></div>
+      <div class="field"><label>账号邮箱（只读）</label><input type="text" id="adv-email" disabled></div>
+    </div>
+    <div class="card">
+      <h3>安全</h3>
+      <div class="field"><label>旧密码</label><input type="password" id="pw-old" autocomplete="current-password"></div>
+      <div class="field"><label>新密码</label><input type="password" id="pw-new" autocomplete="new-password"></div>
+      <button class="btn ghost" onclick="changePassword()">修改密码</button>
+      <hr>
+      <p class="hint">数据保留：热榜 30 天 / 订阅 30 天（retention 可后续扩展）。</p>
+    </div>
+  </div>
+  <div class="actions"><button class="btn" onclick="saveAll()">保存高级配置</button></div>
+</div>
+</main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let config = {};
+let sources = [];
+
+function toast(msg, type) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show ' + (type || 'ok');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.className = '', 3200);
+}
+
+async function api(url, method, body) {
+  const opt = { method: method || 'GET', headers: {} };
+  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const res = await fetch(url, opt);
+  let data = {};
+  try { data = await res.json(); } catch (e) { data = { error: 'HTTP ' + res.status }; }
+  if (res.status === 401) { location.reload(); throw new Error('未登录'); }
+  if (!res.ok && data.error) throw new Error(data.error);
+  return data;
+}
+
+// ---------- 认证 ----------
+let needSetup = false;
+async function checkAuth() {
+  const r = await api('/api/admin/status');
+  if (r.authenticated) { needSetup = false; enterApp(r.email); }
+  else {
+    needSetup = r.needsSetup;
+    $('#a-btn').textContent = needSetup ? '初始化管理员' : '登录';
+    $('#a-err').textContent = needSetup ? '首次使用，请先创建管理员账号' : '';
+    $('#auth-view').style.display = 'block';
+  }
+}
+async function doAuth() {
+  const email = $('#a-email').value.trim();
+  const password = $('#a-password').value;
+  $('#a-err').textContent = '';
+  try {
+    const url = needSetup ? '/api/admin/setup' : '/api/admin/login';
+    const r = await api(url, 'POST', { email, password });
+    enterApp(r.email);
+  } catch (e) { $('#a-err').textContent = e.message; }
+}
+async function doLogout() {
+  await api('/api/admin/logout', 'POST');
+  location.reload();
+}
+function enterApp(email) {
+  $('#auth-view').style.display = 'none';
+  $('#app-view').style.display = 'flex';
+  $('#user-email').textContent = email;
+  $('#adv-email').value = email || '';
+  loadAll();
+}
+
+// ---------- 配置 ----------
+function deepGet(obj, path) {
+  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+function deepSet(obj, path, val) {
+  const keys = path.split('.');
+  let o = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!o[keys[i]] || typeof o[keys[i]] !== 'object') o[keys[i]] = {};
+    o = o[keys[i]];
+  }
+  o[keys[keys.length - 1]] = val;
+}
+function bindInputs() {
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    const val = deepGet(config, el.dataset.path);
+    if (el.type === 'checkbox') el.checked = !!val;
+    else if (el.dataset.array === 'true') el.value = Array.isArray(val) ? val.join('\n') : (val || '');
+    else if (el.dataset.arrayCsv === 'true') el.value = Array.isArray(val) ? val.join(', ') : (val || '');
+    else el.value = val == null ? '' : val;
+  });
+}
+function collect() {
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    let val;
+    if (el.type === 'checkbox') val = el.checked;
+    else if (el.dataset.array === 'true') val = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+    else if (el.dataset.arrayCsv === 'true') val = el.value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    else if (el.type === 'number') val = Number(el.value);
+    else val = el.value;
+    deepSet(config, el.dataset.path, val);
+  });
+  return config;
+}
+async function saveAll() {
+  collect();
+  try {
+    const r = await api('/api/config', 'PUT', config);
+    config = r.config; bindInputs(); renderLists();
+    toast('已保存');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ---------- 热榜来源 ----------
+function addSource() {
+  config.platforms.sources.push({ id: 'bilibili', name: 'B站', expected_domain: '' });
+  renderSources();
+}
+function renderSources() {
+  const box = $('#sources-list');
+  box.innerHTML = '';
+  (config.platforms.sources || []).forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML =
+      `<input data-arr="sources:${i}:id" value="${esc(s.id)}" placeholder="平台ID">` +
+      `<input data-arr="sources:${i}:name" value="${esc(s.name)}" placeholder="名称">` +
+      `<input data-arr="sources:${i}:expected_domain" value="${esc(s.expected_domain || '')}" placeholder="域名校验">` +
+      `<button class="del" onclick="removeAt('sources',${i})">✕</button>`;
+    box.appendChild(row);
+  });
+}
+function removeAt(kind, i) {
+  if (kind === 'sources') config.platforms.sources.splice(i, 1);
+  renderLists();
+}
+function syncLists() {
+  document.querySelectorAll('[data-arr]').forEach((el) => {
+    const [kind, i, field] = el.dataset.arr.split(':');
+    const target = kind === 'sources' ? config.platforms.sources : [];
+    if (target && target[i]) target[i][field] = el.value;
+  });
+}
+function renderLists() { renderSources(); }
+
+// ---------- 订阅源（sources 表） ----------
+async function loadSources() {
+  const r = await api('/api/sources');
+  sources = r.sources || [];
+  renderSubs();
+}
+async function addSubscription() {
+  const kind = $('#sub-kind').value;
+  const url = $('#sub-url').value.trim();
+  const name = $('#sub-name').value.trim();
+  const pull_times = $('#sub-times').value.split(/[,，\s]+/).filter(Boolean);
+  if (!url) return toast('请输入订阅地址', 'err');
+  try {
+    await api('/api/sources', 'POST', { kind, url, name: name || url, pull_times, enabled: true, pull_enabled: true });
+    $('#sub-url').value = ''; $('#sub-name').value = ''; $('#sub-times').value = '';
+    loadSources(); toast('已添加订阅');
+  } catch (e) { toast(e.message, 'err'); }
+}
+function renderSubs() {
+  const box = $('#subs-list');
+  if (!sources.length) { box.innerHTML = '<p class="mono">还没有订阅，上方添加。</p>'; return; }
+  box.innerHTML = '';
+  sources.forEach((s) => {
+    const div = document.createElement('div');
+    div.className = 'item-row';
+    div.innerHTML =
+      `<span class="badge">${esc(s.kind)}</span>` +
+      `<input data-sub-name="${s.id}" value="${esc(s.name)}" placeholder="名称">` +
+      `<code class="mono" style="flex:2;min-width:180px">${esc(s.url || '')}</code>` +
+      `<label class="switch" style="margin:0;min-width:auto"><input data-sub-enabled="${s.id}" type="checkbox" ${s.enabled ? 'checked' : ''}><span style="font-size:12px;color:var(--muted)">启用</span></label>` +
+      `<button class="btn ghost sm" onclick="saveSub('${s.id}')">保存</button>` +
+      `<button class="btn danger sm" onclick="delSub('${s.id}')">删除</button>`;
+    box.appendChild(div);
+  });
+}
+async function saveSub(id) {
+  const name = $(`[data-sub-name="${id}"]`).value.trim();
+  const enabled = $(`[data-sub-enabled="${id}"]`).checked;
+  const s = sources.find(x => x.id === id);
+  try {
+    await api('/api/sources', 'POST', { id, name: name || s.name, enabled, kind: s.kind, url: s.url });
+    loadSources(); toast('已保存');
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function delSub(id) {
+  if (!confirm('删除该订阅？')) return;
+  try { await api('/api/sources/' + encodeURIComponent(id), 'DELETE'); loadSources(); toast('已删除'); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+// ---------- 概览 / 操作 ----------
+async function loadOverview() {
+  try {
+    const r = await api('/api/pipeline/status');
+    $('#ov-lastrun').textContent = r.lastRun && r.lastRun.time ? new Date(r.lastRun.time).toLocaleString() : '从未';
+    $('#ov-lasturgent').textContent = r.lastRun ? ('紧急推送 ' + (r.lastRun.urgentPushed || 0) + ' 条') : '-';
+    $('#ov-running').innerHTML = r.lastRun && r.lastRun.ok === false ? '<span class="err2">上次异常</span>' : '<span class="ok">正常</span>';
+    const pushes = (r.pushes || []).slice(0, 8).map(p => `${p.date} ${p.kind} ×${p.item_count}`).join('<br>') || '暂无';
+    $('#ov-pushes').innerHTML = pushes;
+    const crawls = (r.crawls || []).slice(0, 8).map(c => `${(c.crawl_time || '').replace('T', ' ').slice(5, 16)} +${c.total_items}`).join('<br>') || '暂无';
+    $('#ov-crawls').innerHTML = crawls;
+  } catch (e) { /* ignore */ }
+}
+async function runPipeline() {
+  try {
+    const r = await api('/api/pipeline/run', 'POST', {});
+    toast('管线已执行：紧急 ' + (r.urgent?.pushed || 0) + ' 条' + (r.errors && r.errors.length ? '，异常 ' + r.errors.length : ''));
+    setTimeout(loadOverview, 2500);
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function runUrgent() {
+  try {
+    const r = await api('/api/pipeline/urgent', 'POST');
+    if (r.skipped) toast('未启用或未配置 AI，跳过', 'err');
+    else toast('候选 ' + r.candidates + '，命中 ' + r.hits + '，推送 ' + r.pushed + ' 条');
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function pushReport(type) {
+  try {
+    const r = await api('/api/pipeline/run', 'POST', { forceDigest: true });
+    toast(type === 'daily' ? '日报已推送' : '周报已推送');
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function testPush() {
+  await saveAll();
+  try {
+    const r = await api('/api/pipeline/run', 'POST', {});
+    toast('测试完成（见运行结果）');
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function checkAi() {
+  collect();
+  const r = await api('/api/config', 'GET');
+  const ai = r.config.ai || {};
+  const ok = ai.enabled && (ai.provider === 'workersai' ? true : (ai.api_key && ai.api_key !== '********' && ai.base_url));
+  $('#ai-check').textContent = ok ? '✅ 已配置' : '⚠️ 未完整配置';
+}
+
+// ---------- 安全 ----------
+async function changePassword() {
+  try {
+    const r = await api('/api/admin/change-password', 'POST', { oldPassword: $('#pw-old').value, newPassword: $('#pw-new').value });
+    $('#pw-old').value = ''; $('#pw-new').value = '';
+    toast('密码已修改');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ---------- 标签页 ----------
+function showTab(name) {
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  $('#panel-' + name).classList.add('active');
+  if (name === 'overview') loadOverview();
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function loadAll() {
+  try {
+    const r = await api('/api/config');
+    config = r.config;
+    bindInputs(); renderLists();
+    await Promise.all([loadSources(), loadOverview()]);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+checkAuth();
+</script>
+</body>
+</html>

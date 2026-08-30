@@ -24,6 +24,8 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
-    return legacy.scheduled(controller, env, ctx)
+    // 统一管线：抓取 + 紧急消息即时推送 + 四时段整合推送 + 日报/周报
+    // （newsnow 侧 nitro cloudflare:scheduled 钩子执行 runPipeline）
+    return newsnow.scheduled(controller, env, ctx)
   },
 }

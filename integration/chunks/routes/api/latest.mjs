@@ -1,0 +1,1 @@
+import{d as o}from"../../nitro/nitro.mjs";import{V as r}from"../../_/consts.mjs";import"node:process";import"node:events";import"node:buffer";import"node:timers";import"node:string_decoder";import"node:util";const t=o((async()=>({v:r})));export{t as default};
