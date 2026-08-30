@@ -1,0 +1,20 @@
+# newsnow 单 Worker 部署配置（cloudflare_module preset 产物）
+# 独立部署到新脚本名 "newsnow"，不影响线上 hot-news
+name = "newsnow"
+main = "dist/output/public/_worker.js/index.mjs"
+assets = { directory = "dist/output/public", binding = "ASSETS", browser_safety_checks = true }
+compatibility_date = "2024-10-03"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+[[routes]]
+pattern = "nn.zjkl.qzz.io/*"
+zone_name = "zjkl.qzz.io"
+
+[[d1_databases]]
+binding = "NEWSNOW_DB"
+database_name = "newsnow-db"
+database_id = "2b390780-c900-4e11-a511-8902404e4c30"
+
+[observability]
+enabled = true

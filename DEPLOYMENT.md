@@ -2,6 +2,72 @@
 
 本目录是 **`news.zjkl.qzz.io`（hot-news Worker）当前线上运行版本**的完整快照，用于版本可回溯与故障回滚。
 
+## 2026-08-30 十九次改动（TG 英文直译中文 + freedidi 源·已部署）
+
+> 用户要求：已添加的 TG 群抓取英文直接翻译成中文、不要搞特殊性；并把 freedidi RSS 加进源。
+
+1. **新增 freedidi 源**：`rss.feeds` 追加 `{ id: "freedidi", name: "FreeDiDi", url: "https://www.freedidi.com/feed" }`（worker.js:2276）。
+2. **英文直接翻译**：`isEnglishText` 判定放宽——不再用 0.6 高阈值/来源特判，只要英文占主体或含足够英文(≥3连字母)即判英文并直译中文；单轮新翻译预算 `MAX_NEW` 16→22，减少被静默截断。
+3. **部署**：deployment `10298cdffe6c4b0ea1c2260a8b0b8d5c`（tag `949dfb1f…`，modified_on `2026-08-30T11:22:03Z`）`success:true`；14/14 行为测试全绿（含 runPipeline 分层跑通断言）。
+
+## 2026-08-30 十八次改动（架构分层：采集层独立 + 单层失败隔离 + 推送整合为完整消息·已部署）
+
+> 目标：按 `REFACTOR-PLAN.md` 把 `runPipeline` 单函数真正拆分层，并将"一屏一屏"的碎片推送整合为一条结构化完整消息。
+
+1. **采集层抽取 `pipelineCrawl`**（worker.js:4608）：将平台热榜（`crawlHotlist` 节流抓取）、RSS feed（guid 记忆去重）、自定义订阅（`fetchSub`）三路采集，连同候选池汇总整体移出 `runPipeline`，统一入库并返回 `{rssNewItems, subNewItems, subs, todayNews, todayRss, hotCandidates}`；`runPipeline` 只做编排。
+2. **每层独立 try/catch（单层失败不阻断整条）**：`pipelineCrawl`（采集）、`pipelineSelect`（筛选/去重）、`pipelineEmit`（翻译/渲染/推送三层合一后置推送）各自被 `try/catch` 包裹并写入 `results.errors`，任一层抛错只记错误、不中断后续日/周报与结果收尾。采集/筛选层失败用默认空产物兜底（`top/matchedHot/matchedRss/rssAlways` 默认 `[]`），打通"某一数据源异常不再整体停推"。
+3. **推送整合为完整消息**（`pipelineEmit`，`report.integrated_message=false` 可回退）：默认将各板块（热点资讯/订阅更新/AI 总结/速览 digest）拼接为**一条**消息发送替代逐板块各推一条，图片统一去重收集后作为独立尾推（每轮 ≤9 张 URL 去重封顶），显著减少"一屏一屏"刷屏；长文本新增 `chunkText` 按空行/行安全分段（≤3500 字）避免超渠道限长。
+4. **验证**：`node --check` 通过；`test_newsnow.mjs` 新增 `runPipeline` 分层跑通断言（种子化关闭网络抓取的最小配置，经完整 采集→筛选 返回 `ok=true`）后 14/14 全绿。
+5. **部署**：deployment `6cfb78051fed47398f93a4bed0b1d420`（etag `f8d5c892…`，modified_on `2026-08-30T10:10:20Z`）已上线；`news.zjkl.qzz.io` 首页 200（grid/card/Baloo/08-12-17-20 特征齐）、`/setting`、`/help`、404 均正常。备份：`worker.js.live-before-refactor2`。
+
+## 2026-08-29 十七次改动（重构：newsnow 风格 UI + 四时段完整推送 + pipeline 分层·本地验证通过·待部署）
+
+> 本次为架构重构 + 界面重写，目标完全对齐用户指定的 newsnow dark 单列信息流风格，并把全部功能（热点抓取、订阅、AI、多时段推送）重新整合。所有改动已在本地通过 10/10 行为测试（见下），部署需 Cloudflare 账号凭据（`/data/user/work/deploy.sh` 一键执行）。
+
+1. **四时段完整推送**：新增 `PUSH_SLOTS = { 08:00晨报, 12:00午报, 17:00晚报, 20:00夜报 }`。线上 cron 维持 `*/15 * * * *`，非推送时段只抓取入库、绝不推消息；仅在四整点或手动触发时组装并下发完整消息（`isPushSlot` 门控）。
+2. **pipeline 分层**：将单一 `runPipeline` 拆为 `pipelineSelect`（去重/选择/AI 筛选）+ `pipelineEmit`（翻译/订阅速览/渲染/推送/图片兜底），各层职责单一、行为与旧版等价。
+3. **消息推送面板**：每次整点推送由四板块拼装——①【热点资讯】按分类(综合/AI/科技/游戏/财经/时政)分组、每类≤30 条；②【热点追踪】按关键词/平台展示命中热点并剔除头条已覆盖项；③【订阅更新】(开启速览时以 AI 速览替代逐条明细，纯媒体折叠为 `🖼 媒体消息 ×N`)；④【AI 今日总结】(20:00/开启时附加)。推送记录写 `push_records` 并可在仪表盘查询。
+4. **newsnow 风格仪表盘重写 `renderDashboard`**：深色背景 + 左侧来源分组导航（热榜平台/订阅源）+ 右侧按时间倒序 info-feed，`srcbtn` 过滤、`id=feed` 信息流；**修复重写时遗漏——"推送记录"面板 `pushHtml` 已计算但未插入模板，现补挂到 `#pushPanel` 区块**(平台/订阅标题渲染经独立探针与套件验证)。
+5. **验证**：`node --check` 通过；`test_newsnow.mjs` 10/10 全绿（newsnow 特征、平台/订阅标题、推送记录时段、08/12/17/20 调度说明）。修复一处测试断言笔误（夹具标题"…第一条很长标题"原断言漏"很长"）。
+6. **部署**：待执行 `CF_API_TOKEN=… CF_ACCOUNT_ID=… bash /data/user/work/deploy.sh`（复用线上 D1/KV 绑定，metadata 沿用 `deployed/metadata.json`，cron 不变）。
+
+## 2026-08-29 十六次改动·热修复（停推根因：const 重赋值 + 订阅速览失败兜底·已部署）
+
+> 十六次改动上线后用户反馈"系统不再推送消息"。查 `hotnews:pipeline:last` 确认最近一轮（06:45）以 `Assignment to constant variable.` 失败——原因：跨轮持久去重插入块对 `top` 重新赋值，但 `top` 仍声明为 `const`（`worker.js:4584`），运行到该行即抛 `TypeError`，中断整个流水线、在推送前退出。同时发现一个连带隐患：订阅速览(`sub_digest`)开启时，若 AI 速览失败/为空会把逐条订阅明细也一并吞掉，导致订阅内容整轮消失。
+
+1. **修复停推**：`const top` → `let top`（`worker.js:4584`），跨轮去重不再抛赋值异常。
+2. **订阅速览失败兜底**：速览生成提前到 `renderParts` 之前；仅在真正生成出非空速览时，才以速览替代逐条明细（传空 `rssAlways` 进明细块）；失败/空结果则回退逐条明细，确保订阅内容既不重复也不丢失。`renderParts` 的明细判断还原为按传入的 `rssAlways` 内容。
+3. **验证与部署**：`node --check` 通过；deployment `4a331322409e4712b003ab6e6ac09b52`（etag `d1ae46f0…`，modified_on `2026-08-29T06:50:06Z`）已上线。线上 07:02 新运行 `ok:true`、企业微信推送 8 条全部 `ok:true`，推送恢复；剩余 `errors` 仅为外部数据源凤凰网/微博 D1 过载 500（非本 Worker bug）。
+
+## 2026-08-29 十六次改动（消息质量整合优化：订阅速览/明细二选一 + 跨轮持久去重 + 智能摘要·已部署）
+
+> 用户反馈"消息特别烦而且不精、排版乱、无用重复消息过多"，并发起整合梳理（见 `ARCHITECTURE.md`）。定位三处根因：①订阅内容先被 AI 速览精炼、又被逐条明细重发一遍（双重冗余）；②去重只是 `renderParts` 内存态、不跨 cron 轮次，`top`/热点每轮整池重选导致同一新闻反复推；③摘要按 60/100 字硬切 + `cleanSubText` 误伤人名 `·` + 平台 id 未映射露英文 id。
+
+1. **订阅【速览 vs 明细】二选一**（`renderParts`）：`ai_analysis.sub_digest=true` 时跳过逐条订阅明细，只发 AI 精炼速览，消除"同内容推两遍"。
+2. **跨轮持久去重**（`runPipeline`）：新增 KV 指纹 `push_fp:v2:<日期>`（48h TTL），对 `top`/`matchedHot`/`matchedRss`/`rssAlways` 做当日去重——同一新闻/爆料当天已推送则本轮直接跳过，杜绝跨轮整条重推。
+3. **智能摘要 `smartClip`**：按句末/逗号/顿号等自然断点截断，替代硬切，解决"一段几个字"；过短摘要并入标题省略。
+4. **cleanSubText 细化**：保留人名/版本号中间 `·` 与有意义连字符（只折叠分隔性破折号），补齐 `via t.me` 外链与 `投稿:…`/`投稿者:…` 去噪。
+5. **平台标签补全 + 兜底**：扩充 `platformLabel` 映射，未知/超长 id 回退中文"热榜"，消除英文 id 乱码。
+6. **验证与部署**：`node --check` 通过；`test_v3.mjs` 13 项行为测试全绿（含 `·` 保留、投稿去噪、跨轮去重、媒体按图 URL 判重）。deployment `72357766d13646f6b91238f06bc2da89`（etag `414be875…`，modified_on `2026-08-29T05:39:51Z`）已上线；`news.zjkl.qzz.io` 返回 200，随下一轮 15 分钟 cron 复核。
+
+## 2026-08-28 十五次改动（订阅不再并入热点 + 根治跨轮重复推送·已部署）
+
+> 用户反馈十四次改动后"还是有重复，而且反复发；自定义订阅怎么有一些被并入了热点抓取，有点乱"。定位：`runPipeline` 里 `matchedRss = filterByKeywords([...rssNewItems, ...rssPool], …)`，其中 `rssPool = todayRss` 是**当天全天已入库的整池**（含 6 个 TG 爆料订阅）。线上实测当天 229 条入库 RSS 全部来自订阅、其中 86 条命中关键词（原神/星穹/绝区零/HSR…），于是这些订阅内容**每轮（每 15 分钟）都被重新选入"热点资讯"**——既混入热点抓取显得乱，又造成同一条反复推送。
+
+1. **订阅只进"订阅更新"板块**：进入"热点资讯"的 RSS 关键词匹配不再纳入订阅源（丢弃全量 `rssPool` 作为热点候选）。
+2. **杜绝跨轮重推**：热点板块 RSS 改为**仅取本轮新抓**的 `rssNewItems`（已按 guid 去重、仅首次抓到时进入），订阅内容走 `rssAlways = subNewItems`（同样 guid 去重、仅新鲜推送）。
+3. **验证**：线上今日数据——关键词命中的 229 条全部来自订阅（86 条命中），修复前这 86 条每轮灌入热点；修复后不再进入热点、只在订阅更新首次出现。单测与语法校验通过。
+4. **部署**：deployment（etag `939aa622…`，modified_on `2026-08-28T13:51:31Z`）已上线（对应 14:01 cron 生效前的当前版本）。日报/周报（`buildAndPushScheduled`/`pushNow`）仍用整池，属低频汇总、未一并改动。
+
+## 2026-08-28 十四次改动（推送去重根治：跨板块不重复 + 纯媒体整频道折叠·已部署）
+
+> 用户反馈"抓取的推送送过来的消息不能有重复"。排查发现两处重复源：①同一订阅条目既被关键词命中进"热点资讯"（`matchedRss`/`rss`），又作为本轮新订阅进"订阅更新"（`rssAlways`），同一条在全篇出现两次；②纯媒体频道的 N 条相同占位标题 `(媒体消息)` 会刷屏（此前只做"连续相邻"合并，不连续的仍逐条出现）。在 `renderParts` 内做了统一根治。
+
+1. **全推送统一判重**（`renderParts`）：新增 `itemDedupKey`/`isMediaPlaceholder`，热点/榜单/订阅所有板块共用同一 `seen` 集合——普通消息按规范化标题判重；**纯媒体消息标题互相相同，改用图片 URL（媒体身份）判重**，避免把不同图片误折叠。同一条消息全篇只出现一次（先进入热点则订阅板块跳过）。
+2. **纯媒体整频道折叠**（订阅更新板块）：由"仅连续合并"改为把本频道全部 `🖼 媒体消息` 占位行折叠成一行 `🖼 媒体消息 ×N`，真实图片仍由 `part.images` 以图片消息独立推送（图片本身上限仍 9 张、按 URL 去重）。
+3. **验证**：单测 11 项全过（同条跨板块只现一次、不同图媒体都留、同图媒体去重、同文字标题去重）；离线用线上今日真实数据回放订阅板块——`Seele_Leaks` 51 条(33 媒体) → 渲染 19 行、折叠为 `🖼 媒体消息 ×33` 一行；全局 227 条 → 判重保留 133 条，跨频道无重复正文行。
+4. **部署**：deployment（etag `ec2379bd…`，modified_on `2026-08-28T12:54Z`）已上线。手动 `POST /api/pull` 因后台 `waitUntil` 超平台运行时限被强杀、锁 `hotnews:pipeline:running` 残留 `1`，已复位为 `0`；随后 13:16 cron 用新代码正常跑通（锁复位，新增 `push_records` 13:16:52, item_count 107）。
+
 ## 2026-08-28 十三次改动（配图"还是有头像"根治：历史残留图清空·已部署）
 
 > 用户反馈十二次改动的配图修复上线后"还是有"频道头像图。`parseTelegram` 修复本身正确（纯文字消息不再抓头像、配图消息取真实媒体），但**推送图片来自数据库 `rss_items.image`**，而 `upsertRssItems` 的更新逻辑为 `image = CASE WHEN excluded.image IS NOT NULL AND excluded.image != '' THEN excluded.image ELSE rss_items.image END`——即新值空则保留旧值。修复版对纯文字消息解析出空 image，数据库里历史误存（修复上线前）的频道头像 URL 永远不会被清除，推送 `renderParts` 时 `it.image` 非空仍将头像带出，故"还是有"。本次改为 `image = excluded.image`（总是采用本次抓取值，空则清空），一次性根治。

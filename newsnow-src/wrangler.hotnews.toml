@@ -1,0 +1,43 @@
+# newsnow 单 Worker，部署到 hot-news 主站名（替换旧主站，保留全部绑定）
+# news.zjkl.qzz.io 通过 Custom Domain 绑定到 hot-news，脚本代码更新后域名自动跟随。
+name = "hot-news"
+main = "integration-worker.js"
+assets = { directory = "dist/output/public", binding = "ASSETS" }
+compatibility_date = "2024-10-03"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+# ---- newsnow 需要的数据库 ----
+[[d1_databases]]
+binding = "NEWSNOW_DB"
+database_name = "newsnow-db"
+database_id = "2b390780-c900-4e11-a511-8902404e4c30"
+
+# ---- 保留现有 hot-news 绑定（后续迁移 freedidi/TG/推送 使用）----
+[[d1_databases]]
+binding = "DB"
+database_name = "hot-news-db"
+database_id = "12a7a8d3-f464-4789-a80a-130e689cb44e"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "422b526e3ecf4fada2b583d0442ff6d3"
+
+[vars]
+AI_API_BASE = "https://api.deepseek.com/v1"
+AI_API_KEY = ""
+AI_MODEL = "deepseek-chat"
+NEWSNOW_API_URL = "https://newsnow.busiyi.world/api/s"
+S3_BUCKET = ""
+S3_ENDPOINT = ""
+S3_PATH_PREFIX = "hot-news"
+S3_REGION = "auto"
+DOUYIN_COOKIE = ""
+WEIBO_COOKIE = ""
+
+[observability]
+enabled = true
+
+# ---- 定时触发（合并后由 legacy.scheduled 跑抓取+推送管线）----
+[triggers]
+crons = ["*/15 * * * *"]

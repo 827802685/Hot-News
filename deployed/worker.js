@@ -2,9 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-import settingHtml from "./e5a694f76ef552286da8db2b3e7728ceb6f2ea2c-15e9b0f1de789fe4a120d9b4df80c0fe44d5b96c-setting.html";
-import notFoundHtml from "./8a656678cf22dde03148c0d0c138cf56fad31a44-16244ae3571f7bd40086b7286cddc0dd9ec7ec9c-404.html";
-import helpHtml from "./c806c5c4757c0d388f6f9feab8e99609c5f456dd-791e70e1e771deee06c3159cb64e3e43e8c75460-help.html";
+import settingHtml from "./e5a694f76ef552286da8db2b3e7728ceb6f2ea2c-15e9b0f1de789fe4a120d9b4df80c0fe44d5b96c-setting-html.js";
+import notFoundHtml from "./8a656678cf22dde03148c0d0c138cf56fad31a44-16244ae3571f7bd40086b7286cddc0dd9ec7ec9c-404-html.js";
+import helpHtml from "./c806c5c4757c0d388f6f9feab8e99609c5f456dd-791e70e1e771deee06c3159cb64e3e43e8c75460-help-html.js";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var compose = /* @__PURE__ */ __name2((middleware, onError, onNotFound) => {
@@ -2275,7 +2275,8 @@ var defaultConfig = {
     // RSS 文章新鲜度（推送过滤）
     feeds: [
       { id: "hacker-news", name: "Hacker News", url: "https://hnrss.org/frontpage" },
-      { id: "yahoo-finance", name: "\u96C5\u864E\u8D22\u7ECF", url: "https://finance.yahoo.com/news/rssindex" }
+      { id: "yahoo-finance", name: "\u96C5\u864E\u8D22\u7ECF", url: "https://finance.yahoo.com/news/rssindex" },
+      { id: "freedidi", name: "FreeDiDi", url: "https://www.freedidi.com/feed" }
     ]
   },
   // 筛选
@@ -2813,6 +2814,49 @@ function normalizeTitle(t) {
 }
 __name(normalizeTitle, "normalizeTitle");
 __name2(normalizeTitle, "normalizeTitle");
+function isMediaPlaceholder(it) {
+  return /^[\[\uFF08(]?(\u5A92\u4F53\u6D88\u606F|\u65E0\u6807\u9898)[\s@\]\uFF09)]?/.test((it._zh || it.title || "").trim());
+}
+function itemDedupKey(it) {
+  if (isMediaPlaceholder(it)) {
+    if (it.image) return "img:" + it.image;
+    if (it.url || it.link) return "url:" + (it.url || it.link);
+    if (it.guid) return "guid:" + it.guid;
+    return "media-title:" + normalizeTitle(it.title);
+  }
+  const t = normalizeTitle(it._zh || it.title);
+  if (t) return "title:" + t;
+  if (it.url || it.link) return "url:" + (it.url || it.link);
+  if (it.guid) return "guid:" + it.guid;
+  if (it.image) return "img:" + it.image;
+  return null;
+}
+// ---- 跨轮持久去重：同一"内容指纹"当天已推送则不重复推送（KV 记录当日已推指纹，TTL 48h）----
+async function readPushedFp(env, day) {
+  try {
+    const v = await env.KV.get("push_fp:v2:" + day);
+    return new Set((v || "").split("\n").filter(Boolean));
+  } catch (e) {
+    return new Set();
+  }
+}
+async function writePushedFp(env, day, set) {
+  try {
+    if (!set.size) return;
+    await env.KV.put("push_fp:v2:" + day, [...set].join("\n"), { expirationTtl: 172800 });
+  } catch (e) {
+  }
+}
+// 过滤掉当天已推送的条目；未处理过的条目加入集合并保留
+function filterByPushed(items, pushed) {
+  return (items || []).filter((it) => {
+    const k = itemDedupKey(it);
+    if (!k) return true;
+    if (pushed.has(k)) return false;
+    pushed.add(k);
+    return true;
+  });
+}
 function dedupeItems(items) {
   const map = /* @__PURE__ */ new Map();
   for (const it of items || []) {
@@ -2872,19 +2916,69 @@ function classifyItem(item, cfg) {
 }
 __name(classifyItem, "classifyItem");
 __name2(classifyItem, "classifyItem");
+function cleanSubText(t) {
+  if (!t) return "";
+  let s = String(t).trim();
+  // 去掉 Telegram 爆料前导装饰符号与【频道/主题标签】
+  s = s.replace(/^\s*[•·,*\-–—]+\s*/, "");
+  s = s.replace(/^\s*【[^】]{0,40}】\s*/, "");
+  // 去掉行内外部来源说明（容忍 "via t.me/..." / 前缀形式）
+  s = s.replace(/\s*[（(](?:via\s+)?(?:t\.me|http|https|telegram|外部链接|来源|摘自)[^）)]*[）)]/gi, "");
+  // 折叠分隔性破折号/省略号（及周边空白）为单个顿号；保留人名/版本号中间的"·"与有意义连字符
+  s = s.replace(/\s*[—–…]+\s*/g, "、");
+  // 折叠重复顿号
+  s = s.replace(/[、，,;；]{2,}/g, "、");
+  // 去掉"投稿者/投稿:…"这类低价值署名噪音
+  s = s.replace(/[、，,;；\s]*投稿(?:者|人)?\s*[:：]?[^\s、，,;；]*/g, "");
+  s = s.replace(/\s+/g, " ");
+  s = s.replace(/^[、，,;；：:\s]+/, "");
+  s = s.replace(/[、，,;；：:\s]+$/, "");
+  return s.trim();
+}
+// 智能摘要截断：优先在句末/逗号/顿号等自然断点收尾，避免硬切造成"半句/几个字"
+function smartClip(t, max) {
+  t = String(t || "").trim();
+  if (t.length <= max) return t;
+  const windowSize = t.length < max + 60 ? t.length : max + 40;
+  const part = t.slice(0, windowSize);
+  const s = part.search(/[。；;！!？?…\n]/);
+  if (s > 6 && s <= max) return part.slice(0, s + 1);
+  const p = Math.max(part.lastIndexOf("，" ), part.lastIndexOf("，"), part.lastIndexOf("、"), part.lastIndexOf(" "), part.lastIndexOf(","));
+  const len = p > 6 && p <= max ? p + 1 : max;
+  return t.slice(0, len).replace(/[、，,;；\s]+$/, "") + "…";
+}
+const platformLabel = { "bilibili-hot-search": "\u0042\u7AD9", "bilibili": "\u0042\u7AD9", "bilibili-search": "\u0042\u7AD9", "weibo-hot": "\u5FAE\u535A", "weibo": "\u5FAE\u535A", "douyin-hot": "\u6296\u97F3", "douyin": "\u6296\u97F3", "zhihu-hot": "\u77E5\u4E4E", "zhihu": "\u77E5\u4E4E", "baidu-hot": "\u767E\u5EA6", "baidu-search": "\u767E\u5EA6", "baidu": "\u767E\u5EA6", "163-news": "\u7F51\u6613", "netease": "\u7F51\u6613", "today-news": "\u4ECA\u65E5\u5934\u6761", "tencent-news": "\u817E\u8BAF", "tencent": "\u817E\u8BAF", "toutiao": "\u4ECA\u65E5\u5934\u6761", "sina": "\u65B0\u6D6A", "kuaishou-hot": "\u5FEB\u624B", "kuaishou": "\u5FEB\u624B", "qq-news": "\u817E\u8BAF\u65B0\u95FB", "douban": "\u8C46\u74E3" };
 function fmtItem(it) {
-  const p = it.platform || it.platform_name || it.platform_id || "\u70ED\u699C";
-  const title = (it._zh || it.title || "").trim() || "(\u65E0\u6807\u9898)";
-  let summary = "";
-  const zhSum = it._zhSummary;
-  let raw2 = (zhSum || it.description || it.summary || "").replace(/\n/g, " ").replace(/<[^>]+>/g, "").trim();
-  // Telegram 解析常把整句同时写入标题与摘要，去掉"摘要以标题开头"的重复前缀
-  const origTitle = (it.title || "").trim();
-  if (raw2 && origTitle && origTitle.length > 2 && raw2.startsWith(origTitle)) {
-    raw2 = raw2.slice(origTitle.length).replace(/^[-—:…，,。.\s•·（(【[]+/, "");
+  const isSub = it.source_kind === "sub" || String(it.feed_id || "").toLowerCase().startsWith("tg-");
+  const pRaw = it.platform || it.platform_name || it.platform_id || "\u70ED\u699C";
+  const p = platformLabel[String(pRaw).toLowerCase()] || (String(pRaw).length <= 8 ? pRaw : "\u70ED\u699C");
+  let title = (it._zh || it.title || "").trim() || "(\u65E0\u6807\u9898)";
+  let raw2 = (it._zhSummary || it.description || it.summary || "").replace(/\n/g, " ").replace(/<[^>]+>/g, "").trim();
+  if (isSub) {
+    // 自定义订阅正文：清洗 Telegram 原文排版噪音（【标签】/——/投稿者/外链），并收紧长度
+    title = cleanSubText(title) || "(\u65E0\u6807\u9898)";
+    raw2 = cleanSubText(raw2).replace(/^[、，,;；：:\s]+/, "");
+    if (raw2 && title.length > 2 && raw2.startsWith(title)) {
+      raw2 = raw2.slice(title.length).replace(/^[-—:…，,。.\s•·（(【、[]+/, "");
+    }
+  } else {
+    // Telegram 解析常把整句同时写入标题与摘要，去掉"摘要以标题开头"的重复前缀
+    const origTitle = (it.title || "").trim();
+    if (raw2 && origTitle && origTitle.length > 2 && raw2.startsWith(origTitle)) {
+      raw2 = raw2.slice(origTitle.length).replace(/^[-—:…，,。.\s•·（(【、[]+/, "");
+    }
   }
-  if (raw2) {
-    summary = raw2.length > 100 ? raw2.slice(0, 100) + "\u2026" : raw2;
+  let summary = "";
+  // 智能截断（按标点/词边界收尾），避免"一段几个字"的硬切
+  if (raw2) summary = smartClip(raw2, isSub ? 80 : 120);
+  // 摘要在清洗后过短且与标题高度重合时，并入标题省略，不硬拼"标题 — 摘要"
+  if (summary && summary.length <= 4 && title.length > 4) summary = "";
+  // 纯媒体消息（无文字）的标题是占位符 `(媒体消息) @username` / `(无标题)`：
+  // 若它带真实配图，正文用一句简短"🖼 媒体消息"代替，避免 N 条一模一样的占位标题刷屏；
+  // 图片本身仍通过 part.images 以图片消息独立推送。
+  const isMediaPlaceholder = /^[\[（(]?(媒体消息|无标题)[\s@\]）)]?/.test((it._zh || it.title || "").trim());
+  if (isMediaPlaceholder && it.image) {
+    return `\u2022 [${p}] \u{1F5BC}\uFE0F \u5A92\u4F53\u6D88\u606F`;
   }
   // 每行不再附加来源署名（频道名），避免重复刷屏；来源在板块头部已标注
   let line = summary ? `\u2022 [${p}] ${title} \u2014 ${summary}` : `\u2022 [${p}] ${title}`;
@@ -2987,6 +3081,16 @@ function renderParts(cfg, data) {
   const { title: appTitle, timeStr, top, hotlist, rss, rssAlways, analysis } = data;
   const categories = cfg.report.categories || ["\u7EFC\u5408", "AI", "\u79D1\u6280", "\u6E38\u620F", "\u8D22\u7ECF", "\u65F6\u653F"];
   const parts = [];
+  // 全推送统一判重：热点/订阅等所有板块共用同一 seen，保证同一条消息全篇只出现一次。
+  // 普通消息按规范化标题判重；纯媒体消息标题互相相同，改用图片 URL（媒体身份）判重，避免不同图片被误折叠。
+  const seen = new Set();
+  const keepUnique = (it) => {
+    const k = itemDedupKey(it);
+    if (!k) return true;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  };
   const hotItems = [];
   if (top && top.length) hotItems.push(...top.map((it) => ({ ...it, _source: "top" })));
   if (hotlist && hotlist.groups) {
@@ -2995,7 +3099,7 @@ function renderParts(cfg, data) {
     }
   }
   if (rss && rss.length) hotItems.push(...rss.map((it) => ({ ...it, _source: "rss" })));
-  const deduped = globalDedupe(hotItems);
+  const deduped = hotItems.filter(keepUnique);
   const grouped = {};
   for (const cat of categories) grouped[cat] = [];
   for (const it of deduped) {
@@ -3021,9 +3125,12 @@ function renderParts(cfg, data) {
     for (const it of sliceItems) if (it.image) catImgs.push(it.image);
     parts.push({ type: "part", category: cat, text: lines.join("\n"), itemsCount: items.length, images: catImgs });
   }
+  // 订阅明细统一走 renderParts：是否显示由 runPipeline 传入的 rssAlways 决定
+  // （开启 sub_digest 且速览生成成功时传空数组以明细代之以速览；失败则仍回退逐条明细，不丢内容）
   if (rssAlways && rssAlways.length) {
     const bySub = {};
     for (const it of rssAlways) {
+      if (!keepUnique(it)) continue;
       const name = it.feed_name || "\u672A\u77E5\u8BA2\u9605";
       (bySub[name] = bySub[name] || []).push(it);
     }
@@ -3034,7 +3141,21 @@ function renderParts(cfg, data) {
       lines.push(`\u3010\u8BA2\u9605\u66F4\u65B0\u3011${timeStr}  \xB7  ${name}`);
       const max = 20;
       const sliceItems = items.slice(0, max);
-      sliceItems.forEach((it) => lines.push(fmtItem(it)));
+      // 合并连续"纯媒体消息"占位行：N 条相同"🖼 媒体消息"折叠成一行"🖼 媒体消息 ×N"，
+      // 避免纯图频道的 N 条相同占位标题刷屏；这些媒体的真实图片仍由 part.images 单独推送。
+      const mergedLines = [];
+      const isMediaLine = (li) => /^\u2022 \[[^\]]+\] \u{1F5BC}\uFE0F \u5A92\u4F53\u6D88\u606F/.test(li);
+      const sliceMedia = sliceItems.filter((it) => isMediaLine(fmtItem(it))).length;
+      for (const it of sliceItems) {
+        const li = fmtItem(it);
+        if (isMediaLine(li)) continue;
+        mergedLines.push(li);
+      }
+      if (sliceMedia > 0) {
+        mergedLines.push(`\u2022 [\u70ED\u699C] \u{1F5BC}\uFE0F \u5A92\u4F53\u6D88\u606F${sliceMedia > 1 ? ` \xD7${sliceMedia}` : ""}`);
+      }
+      const pushLines = mergedLines.length ? mergedLines : sliceItems.map((it) => fmtItem(it));
+      pushLines.forEach((l) => lines.push(l));
       if (items.length > max) lines.push(`\u2026 \u5171 ${items.length} \u6761`);
       lines.push("");
       lines.push("\u{1F4A1} \u6570\u636E\u6765\u6E90\uFF1A\u81EA\u5B9A\u4E49\u8BA2\u9605");
@@ -4038,6 +4159,9 @@ var DEDUP_PREFIX = "hotnews:dedup:";
 var SUBS_KEY = "hotnews:subscriptions";
 var TG_WEEK_KEY = "hotnews:telegram:weekly";
 var ANALYSIS_KEY = "hotnews:analysis:last";
+// 每日完整消息推送时段（4 段）：其余 cron 轮次仅抓取入库、不推送整条消息。
+// 值为该时段的标题后缀，用于拼接"晨报/午报/晚报/夜报"。
+var PUSH_SLOTS = { "08:00": "\u6668\u62A5", "12:00": "\u5348\u62A5", "17:00": "\u665A\u62A5", "20:00": "\u591C\u62A5" };
 async function getSubscriptions(env) {
   const raw2 = await readKV(env, SUBS_KEY);
   if (!raw2) return [];
@@ -4154,9 +4278,12 @@ __name2(archiveToS3, "archiveToS3");
 // 判断文本是否主要为英文（含足够英文字母即认为是需翻译的英文条目）
 function isEnglishText(s) {
   if (!s) return false;
-  const ascii = (String(s).match(/[A-Za-z]/g) || []).length;
-  const total = String(s).trim().length;
-  return total > 5 && ascii / total > 0.6;
+  const t = String(s).trim();
+  const ascii = (t.match(/[A-Za-z]/g) || []).length;
+  const total = t.length;
+  if (total < 4) return false;
+  // 不搞特殊性：只要英文占主体或含足够英文即判定为英文，直接翻译成中文，不做来源特殊对待
+  return ascii / total > 0.35 || /[A-Za-z]{3}/.test(t);
 }
 __name(isEnglishText, "isEnglishText");
 __name2(isEnglishText, "isEnglishText");
@@ -4179,7 +4306,7 @@ async function translateItems(cfg, env, items, language) {
   trStats = { ai: 0, my: 0, err: 0, lastErr: "" };
   // ① 先查 KV 翻译缓存：相同英文文本不重复翻译（直接复用），既省配额又压降 subrequest 数
   // ② 未命中的部分按预算限制本轮新翻译条数，避免单次调用 subrequest 超限被强杀（Too many subrequests）
-  const MAX_NEW = 16;
+  const MAX_NEW = 22;
   const MAXC = 3;
   let budget = MAX_NEW;
   let doneCnt = 0;
@@ -4310,6 +4437,326 @@ ${pool.join("\n")}`;
 }
 __name(aiTidySubscriptions, "aiTidySubscriptions");
 __name2(aiTidySubscriptions, "aiTidySubscriptions");
+// ===== 阶段 SELECT：内容筛选与去重（独立于抓取与渲染，便于单测与复用）=====
+async function pipelineSelect(cfg, env, today, todayNews, rssNewItems, subNewItems, hotCandidates, isPushSlot, results) {
+  const flatToday = [];
+  for (const [pid, pdata] of Object.entries(todayNews)) {
+    for (const it of pdata) flatToday.push({ ...it, platform_id: pid, platform_name: pid });
+  }
+  let top = dedupeItems(flatToday).slice(0, cfg.report.top_count || 10);
+  let rssAlways = subNewItems;
+  let matchedHot = [];
+  let matchedRss = [];
+  if (cfg.filter.method === "ai" && aiAvailable(cfg, env)) {
+    try {
+      const r1 = await filterByAI(cfg, env, hotCandidates, cfg.filter.interests);
+      matchedHot = r1.matched || [];
+      if (r1.error) results.errors.push(`AI\u7B5B\u9009: ${r1.error}`);
+    } catch (e) {
+      results.errors.push(`AI\u7B5B\u9009\u5F02\u5E38, \u56DE\u9000\u5173\u952E\u8BCD: ${e.message}`);
+      matchedHot = filterByKeywords(hotCandidates, cfg.filter.keywords).matched;
+    }
+  } else {
+    matchedHot = filterByKeywords(hotCandidates, cfg.filter.keywords).matched;
+  }
+  // 进入"热点资讯"板块的 RSS 关键词匹配项修正：
+  // ① 自定义订阅（TG 爆料频道）只留在"订阅更新"板块，不再混入热点抓取——不把订阅源纳入热点候选；
+  // ② 只取"本轮新抓"的 RSS（rssNewItems 已按 guid 去重，仅首次抓到时进入），
+  //    不再每轮从"全天已入库(rssPool)"整池重选，杜绝同一条被反复推送。
+  matchedRss = filterByKeywords(rssNewItems, cfg.filter.keywords).matched;
+  // ③ 跨轮持久去重：仅在本轮会推送时才应用并回写指纹。
+  //    否则（非推送时段仅抓取）不回写，避免把"未推送项"误标记为已推送、导致下一时段漏推。
+  if (isPushSlot) {
+    const pushedSet = await readPushedFp(env, today);
+    top = filterByPushed(top, pushedSet);
+    matchedHot = filterByPushed(matchedHot, pushedSet);
+    matchedRss = filterByPushed(matchedRss, pushedSet);
+    rssAlways = filterByPushed(rssAlways, pushedSet);
+    if (pushedSet.size) await writePushedFp(env, today, pushedSet);
+  }
+  // 平台分期分组（display_mode=platform 按平台分组，否则按关键词分组）
+  let hotGroups = {};
+  const topTitles = new Set(top.map((it) => it.title));
+  if (cfg.report.display_mode === "platform") {
+    for (const m of matchedHot) {
+      if (!topTitles.has(m.item.title)) {
+        const key = m.item.platform_name || m.item.platform_id;
+        (hotGroups[key] = hotGroups[key] || []).push(m.item);
+      }
+    }
+  } else {
+    for (const m of matchedHot) {
+      if (topTitles.has(m.item.title)) continue;
+      const key = m.keyword || m.item.platform_name || m.item.platform_id || "\u5176\u4ED6";
+      (hotGroups[key] = hotGroups[key] || []).push(m.item);
+    }
+  }
+  for (const k of Object.keys(hotGroups)) hotGroups[k] = dedupeItems(hotGroups[k]);
+  if (!Object.keys(hotGroups).length) hotGroups = null;
+  return { top, matchedHot, matchedRss, rssAlways, hotGroups };
+}
+__name(pipelineSelect, "pipelineSelect");
+__name2(pipelineSelect, "pipelineSelect");
+// ===== 阶段 TRANSLATE → SUMMARIZE → RENDER → PUSH：组装完整消息并发送 =====
+// 将超长文本按 maxLen 分段（优先在空行/换行处断，保留段落完整性），用于单条消息限长。
+function chunkText(text, maxLen) {
+  if (!text) return [];
+  if (text.length <= maxLen) return [text];
+  const segs = [];
+  let buf = "";
+  // 先按空行拆段，再在段内按行回填，保证尽量不从一句中间硬切。
+  const paragraphs = String(text).split(/\n{1,}/);
+  for (const para of paragraphs) {
+    const block = para + "\n";
+    if (buf.length + block.length > maxLen && buf.length) {
+      segs.push(buf);
+      buf = "";
+      if (block.length > maxLen) {
+        // 单个段落仍超长：按行兜底切
+        for (const line of block.split("\n")) {
+          if ((buf + "\n" + line).length > maxLen && buf.length) { segs.push(buf); buf = ""; }
+          buf += (buf ? "\n" : "") + line;
+        }
+        buf += "\n";
+        continue;
+      }
+    }
+    buf += block;
+  }
+  if (buf.trim()) segs.push(buf.replace(/\n+$/, ""));
+  return segs;
+}
+async function pipelineEmit(cfg, env, tz, today, pushSlot, sel, results) {
+  const { top, matchedHot, matchedRss, rssAlways, hotGroups } = sel;
+  // TRANSLATE：订阅/Telegram 英文内容翻译为中文（AI 失败回退原文）
+  const subItemsForTr = [...matchedRss.map((m) => m.item), ...rssAlways];
+  if (cfg.ai_translation && cfg.ai_translation.enabled) {
+    try { await translateItems(cfg, env, subItemsForTr, cfg.ai_translation.language); } catch (e) {}
+  }
+  // SUMMARIZE：AI 整理自定义订阅速览；失败/无结果则仍回退逐条明细，确保订阅内容既不重复也不丢失
+  let subDigest = "";
+  if (cfg.ai_analysis && cfg.ai_analysis.sub_digest && rssAlways && rssAlways.length) {
+    try {
+      subDigest = (await aiTidySubscriptions(cfg, env, rssAlways)) || "";
+    } catch (e) {
+      results.errors.push(`\u8BA2\u9605\u901F\u89C8: ${e.message}`);
+    }
+  }
+  // RENDER：生成各板块文案
+  const data = {
+    title: (cfg.app.title || "Hot News \u70ED\u70B9\u901F\u9012") + (pushSlot ? " \xB7 " + pushSlot : ""),
+    timeStr: nowMinuteStr(tz) + (pushSlot ? " \xB7 " + pushSlot : ""),
+    top,
+    topCount: cfg.report.top_count || 10,
+    hotlist: hotGroups ? { groups: hotGroups, mode: cfg.report.display_mode } : void 0,
+    rss: matchedRss.map((m) => m.item),
+    rssAlways: subDigest ? [] : rssAlways,
+    analysis: results.analysis
+  };
+  const parts = renderParts(cfg, data);
+  if (subDigest) {
+    const dtext = `\u3010\u8BA2\u9605\u901F\u89C8\u3011${nowMinuteStr(tz)}\n${subDigest}\n\n\u{1F916} \u6570\u636E\u6765\u6E90\uFF1AAI \u6574\u7406\u81EA\u5B9A\u4E49\u8BA2\u9605`;
+    parts.unshift({ type: "digest", text: dtext });
+  }
+  // PUSH：默认将多个板块整合为一条完整消息推送（report.integrated_message=false 时回退逐板块），
+  // 图片统一收集后作为独立尾推（每轮 9 张 URL 去重封顶），减少"一屏一屏"刷屏。
+  results.push = [];
+  const integrated = (cfg.report || {}).integrated_message !== false;
+  const wkChan = push_default.configuredChannels((cfg.notification || {}).channels || {}).find((c) => c.name === "wework");
+  // 先收集全篇去重后图片，避免逐板块各自图片导致同一张图重复直发
+  const allImages = [];
+  {
+    const imgSeen = new Set();
+    for (const part of parts) {
+      if (part.images && part.images.length) {
+        for (const u of part.images) {
+          if (!imgSeen.has(u)) { imgSeen.add(u); allImages.push(u); }
+        }
+      }
+    }
+  }
+  let imgTotal = 0;
+  const imgFail = [];
+  if (integrated) {
+    const full = parts.map((p) => p.text).filter(Boolean).join("\n\n");
+    for (const seg of chunkText(full, 3500)) {
+      const pr = await push_default.push(env, cfg, seg);
+      results.push.push(...(pr || []));
+    }
+  } else {
+    for (const part of parts) {
+      const pr = await push_default.push(env, cfg, part.text);
+      results.push.push(...(pr || []));
+    }
+  }
+  if (wkChan && allImages.length) {
+    for (const u of allImages.slice(0, 9)) {
+      if (imgTotal >= 9) break;
+      let ir;
+      try { ir = await sendWeworkImage(wkChan.cfg, u); }
+      catch (e) { ir = { ok: false, error: e.message, url: u }; }
+      if (ir && ir.ok) imgTotal++;
+      else if (ir) imgFail.push(ir.url || u);
+    }
+  }
+  results.imagesSent = imgTotal;
+  try { await writeKV(env, "hotnews:last:imgs", JSON.stringify({ imagesSent: imgTotal, fail: imgFail, at: (/* @__PURE__ */ new Date()).toISOString() }), 86400); } catch (e) {}
+  if (imgFail.length) {
+    const note = "\u{1F5BC}\uFE0F \u4E0B\u5217\u56FE\u7247\u672A\u80FD\u76F4\u53D1\uFF0C\u8BF7\u70B9\u94FE\u63A5\u67E5\u770B\uFF1A\n" + imgFail.join("\n");
+    results.push.push(...(await push_default.push(env, cfg, note)));
+  }
+  results.partsCount = parts.length;
+  results.totalItems = parts.reduce((s, p) => s + (p.itemsCount || 0), 0);
+  try {
+    await env.DB.prepare("INSERT INTO push_records (date, push_time, item_count, mode) VALUES (?, ?, ?, ?)").bind(today, (/* @__PURE__ */ new Date()).toISOString(), top.length + matchedHot.length + matchedRss.length + rssAlways.length, cfg.report.mode).run();
+  } catch (e) {
+  }
+}
+__name(pipelineEmit, "pipelineEmit");
+__name2(pipelineEmit, "pipelineEmit");
+// ===== 阶段 CRAWL：数据采集层（平台热榜 + RSS feed + 自定义订阅），统一入库(D1)并返回本轮产物 =====
+async function pipelineCrawl(env, cfg, tz, today, trigger, clock, results) {
+  const nowTs = Date.now();
+  // --- 平台热榜（受 interval_minutes 间隔门控）---
+  if (cfg.platforms.enabled) {
+    const interval = (cfg.platforms.interval_minutes || 60) * 60 * 1e3;
+    const lastRaw = await readKV(env, LAST_CRAWL_KEY);
+    const last = lastRaw ? Number(lastRaw) : 0;
+    const due = trigger === "manual" || nowTs - last >= interval;
+    if (due) {
+      let byPlatform = {};
+      let failed = [];
+      try {
+        const r = await crawlHotlist(cfg, env);
+        byPlatform = r.byPlatform || {};
+        failed = r.failed || [];
+      } catch (e) {
+        failed = [{ id: "all", alias: "全部平台", error: "crawlHotlist: " + e.message }];
+      }
+      results.hotlist = { byPlatform, failed };
+      const flat = [];
+      for (const [pid, pdata] of Object.entries(byPlatform)) {
+        for (const it of pdata.items) flat.push({ ...it, platform_id: pid });
+      }
+      if (flat.length) {
+        await upsertNewsItems(env, flat, today);
+        await recordRanks(env, flat, today);
+      }
+      for (const f of failed) results.errors.push(`热榜[${f.alias}] ${f.error}`);
+      await writeKV(env, LAST_CRAWL_KEY, String(nowTs));
+      await recordCrawl(env, "hotlist", flat.length, JSON.stringify(failed).slice(0, 500));
+      if (cfg.storage.raw_archive) {
+        try {
+          const k = await archiveToS3(env, cfg, "hotlist", { time: nowMinuteStr(tz), byPlatform, failed });
+          results.hotlistArchive = k;
+        } catch (e) {
+          results.errors.push("S3归档: " + e.message);
+        }
+      }
+    }
+  }
+  // --- RSS feed（记忆 guid 窗口去重，只取本轮新抓）---
+  const rssNewItems = [];
+  if (cfg.rss.enabled && Array.isArray(cfg.rss.feeds)) {
+    for (const feed of cfg.rss.feeds) {
+      if (feed.enabled === false) continue;
+      try {
+        if (feed.type === "platform") {
+          const pid = String(feed.url || "").replace(/^\/rss\/hot\//, "").replace(/\.xml$/i, "");
+          if (!pid) throw new Error("平台 feed 缺少平台 ID");
+          const pnews = await getNewsByDate(env, today, [pid]);
+          const pitems = (pnews[pid] || []).slice(0, 30).map((it) => ({
+            id: it.url || it.title,
+            guid: it.url || it.mobile_url || it.title,
+            title: it.title,
+            link: it.url || "",
+            description: it.title,
+            feed_id: feed.id,
+            feed_name: feed.name,
+            summary: it.title || ""
+          }));
+          const pNew = await dedup(env, "rss:" + feed.id, pitems);
+          rssNewItems.push(...pNew.map((it) => ({ ...it, source_kind: "rss" })));
+          await upsertRssItems(env, pitems.map((it) => ({ ...it, title: it.title || "(无标题)" })), today);
+          await updateRssFeedStatus(env, feed.id, "success", pitems.length);
+          continue;
+        }
+        const text = await fetchText(feed.url, {
+          headers: { "User-Agent": DEFAULT_UA, Accept: "application/rss+xml, application/atom+xml, application/xml, text/html,*/*;q=0.8" }
+        });
+        const parsed = await detectAndParse(feed.url, text);
+        const items = (parsed.items || []).slice(0, 30).map((it) => ({
+          ...it,
+          feed_id: feed.id,
+          feed_name: feed.name,
+          summary: it.description || ""
+        }));
+        const freshForPush = items.filter((it) => {
+          if (!cfg.rss.max_age_days) return true;
+          if (!it.pubDate) return true;
+          const d = new Date(it.pubDate).getTime();
+          if (isNaN(d)) return true;
+          return nowTs - d < cfg.rss.max_age_days * 24 * 3600 * 1e3;
+        });
+        const newItems = await dedup(env, "rss:" + feed.id, freshForPush);
+        rssNewItems.push(...newItems.map((it) => ({ ...it, source_kind: "rss" })));
+        await upsertRssItems(env, items.map((it) => ({ ...it, title: it.title || "(无标题)" })), today);
+        await updateRssFeedStatus(env, feed.id, "success", items.length);
+      } catch (e) {
+        results.errors.push(`RSS[${feed.id}] ${e.message}`);
+        await updateRssFeedStatus(env, feed.id, "failed", 0);
+      }
+    }
+  }
+  results.rssNew = rssNewItems;
+  // --- 自定义订阅(TG/平台/URL 源，受 isSubDue 频控)---
+  const subs = await getSubscriptions(env);
+  const subNewItems = [];
+  for (const sub of subs) {
+    if (trigger === "manual") {
+      if (!sub.pullEnabled) continue;
+    } else {
+      if (!isSubDue(sub, clock)) continue;
+    }
+    try {
+      const parsed = await fetchSub(env, sub, cfg);
+      const items = (parsed.items || []).slice(0, 30).map((it) => ({ ...it, feed_id: sub.id, feed_name: sub.title || sub.name, summary: it.description || "" }));
+      const newItems = await dedup(env, "sub:" + sub.id, items);
+      subNewItems.push(...newItems.map((it) => ({ ...it, source_kind: "sub" })));
+      await upsertRssItems(env, items.map((it) => ({ ...it, title: it.title || "(无标题)" })), today);
+      sub.lastPull = Date.now();
+    } catch (e) {
+      results.errors.push(`订阅[${sub.title || sub.id}] ${e.message}`);
+    }
+  }
+  if (subs.some((s) => s.lastPull)) await saveSubscriptions(env, subs);
+  results.subNew = subNewItems;
+  // --- 汇总候选池（本轮热榜优先，兜底用今日已入库）---
+  const platformIds = (cfg.platforms.sources || []).map((s) => s.id);
+  const todayNews = await getNewsByDate(env, today, platformIds);
+  const todayRss = await getRssByDate(env, today, void 0);
+  let hotCandidates = [];
+  if (results.hotlist) {
+    const flat = [];
+    for (const [pid, pdata] of Object.entries(results.hotlist.byPlatform || {})) {
+      for (const it of pdata.items) flat.push({ ...it, platform_id: pid, platform_name: pdata.alias });
+    }
+    hotCandidates = flat;
+  }
+  if (!hotCandidates.length) {
+    const seen = new Set();
+    for (const [pid, pdata] of Object.entries(todayNews)) {
+      for (const it of pdata) {
+        const k = it.url || it.title;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        hotCandidates.push({ ...it, platform_id: pid, platform_name: pid });
+      }
+    }
+    hotCandidates = hotCandidates.slice(0, 200);
+  }
+  return { rssNewItems, subNewItems, subs, todayNews, todayRss, hotCandidates };
+}
 async function runPipeline(env, { trigger = "cron" } = {}) {
   const running = await readKV(env, RUNNING_KEY);
   if (running === "1") return { ok: true, running: true, message: "\u6D41\u6C34\u7EBF\u5DF2\u5728\u8FD0\u884C" };
@@ -4319,188 +4766,31 @@ async function runPipeline(env, { trigger = "cron" } = {}) {
     const tz = cfg.app.timezone || "Asia/Shanghai";
     const today = todayStr(tz);
     const clock = nowClock(tz);
+    const pushSlot = PUSH_SLOTS[clock];
+    const isPushSlot = trigger === "manual" || !!pushSlot;
     const nowTs = Date.now();
     const results = { hotlist: null, rssNew: [], subNew: [], matched: [], analysis: null, push: [], errors: [] };
     await ensureSchema(env);
-    if (cfg.platforms.enabled) {
-      const interval = (cfg.platforms.interval_minutes || 60) * 60 * 1e3;
-      const lastRaw = await readKV(env, LAST_CRAWL_KEY);
-      const last = lastRaw ? Number(lastRaw) : 0;
-      const due = trigger === "manual" || nowTs - last >= interval;
-      if (due) {
-        let byPlatform = {};
-        let failed = [];
-        try {
-          const r = await crawlHotlist(cfg, env);
-          byPlatform = r.byPlatform || {};
-          failed = r.failed || [];
-        } catch (e) {
-          failed = [{ id: "all", alias: "\u5168\u90E8\u5E73\u53F0", error: "crawlHotlist: " + e.message }];
-        }
-        results.hotlist = { byPlatform, failed };
-        const flat = [];
-        for (const [pid, pdata] of Object.entries(byPlatform)) {
-          for (const it of pdata.items) flat.push({ ...it, platform_id: pid });
-        }
-        if (flat.length) {
-          await upsertNewsItems(env, flat, today);
-          await recordRanks(env, flat, today);
-        }
-        for (const f of failed) results.errors.push(`\u70ED\u699C[${f.alias}] ${f.error}`);
-        await writeKV(env, LAST_CRAWL_KEY, String(nowTs));
-        await recordCrawl(env, "hotlist", flat.length, JSON.stringify(failed).slice(0, 500));
-        if (cfg.storage.raw_archive) {
-          try {
-            const k = await archiveToS3(env, cfg, "hotlist", { time: nowMinuteStr(tz), byPlatform, failed });
-            results.hotlistArchive = k;
-          } catch (e) {
-            results.errors.push("S3\u5F52\u6863: " + e.message);
-          }
-        }
-      }
+let crawlOut = { rssNewItems: [], subNewItems: [], subs: [], todayNews: {}, todayRss: [], hotCandidates: [] };
+    try {
+      crawlOut = await pipelineCrawl(env, cfg, tz, today, trigger, clock, results) || crawlOut;
+    } catch (e) {
+      results.errors.push(`CRAWL\u5C42\u5931\u8D25: ${e.message}`);
     }
-    const rssNewItems = [];
-    if (cfg.rss.enabled && Array.isArray(cfg.rss.feeds)) {
-      for (const feed of cfg.rss.feeds) {
-        if (feed.enabled === false) continue;
-        try {
-          if (feed.type === "platform") {
-            const pid = String(feed.url || "").replace(/^\/rss\/hot\//, "").replace(/\.xml$/i, "");
-            if (!pid) throw new Error("\u5E73\u53F0 feed \u7F3A\u5C11\u5E73\u53F0 ID");
-            const pnews = await getNewsByDate(env, today, [pid]);
-            const pitems = (pnews[pid] || []).slice(0, 30).map((it) => ({
-              id: it.url || it.title,
-              guid: it.url || it.mobile_url || it.title,
-              title: it.title,
-              link: it.url || "",
-              description: it.title,
-              feed_id: feed.id,
-              feed_name: feed.name,
-              summary: it.title || ""
-            }));
-            const pNew = await dedup(env, "rss:" + feed.id, pitems);
-            rssNewItems.push(...pNew.map((it) => ({ ...it, source_kind: "rss" })));
-            await upsertRssItems(env, pitems.map((it) => ({ ...it, title: it.title || "(\u65E0\u6807\u9898)" })), today);
-            await updateRssFeedStatus(env, feed.id, "success", pitems.length);
-            continue;
-          }
-          const text = await fetchText(feed.url, {
-            headers: { "User-Agent": DEFAULT_UA, Accept: "application/rss+xml, application/atom+xml, application/xml, text/html,*/*;q=0.8" }
-          });
-          const parsed = await detectAndParse(feed.url, text);
-          const items = (parsed.items || []).slice(0, 30).map((it) => ({
-            ...it,
-            feed_id: feed.id,
-            feed_name: feed.name,
-            summary: it.description || ""
-          }));
-          const freshForPush = items.filter((it) => {
-            if (!cfg.rss.max_age_days) return true;
-            if (!it.pubDate) return true;
-            const d = new Date(it.pubDate).getTime();
-            if (isNaN(d)) return true;
-            return nowTs - d < cfg.rss.max_age_days * 24 * 3600 * 1e3;
-          });
-          const newItems = await dedup(env, "rss:" + feed.id, freshForPush);
-          rssNewItems.push(...newItems.map((it) => ({ ...it, source_kind: "rss" })));
-          await upsertRssItems(env, items.map((it) => ({ ...it, title: it.title || "(\u65E0\u6807\u9898)" })), today);
-          await updateRssFeedStatus(env, feed.id, "success", items.length);
-        } catch (e) {
-          results.errors.push(`RSS[${feed.id}] ${e.message}`);
-          await updateRssFeedStatus(env, feed.id, "failed", 0);
-        }
-      }
+    const { rssNewItems, subNewItems, subs, todayNews, todayRss, hotCandidates } = crawlOut;
+
+    // ===== 阶段 SELECT：AI/关键词筛选 + 跨轮持久去重 + 平台分期分组 =====
+    let sel = {};
+    try {
+      sel = await pipelineSelect(cfg, env, today, todayNews, rssNewItems, subNewItems, hotCandidates, isPushSlot, results) || {};
+    } catch (e) {
+      results.errors.push(`SELECT\u5C42\u5931\u8D25: ${e.message}`);
     }
-    results.rssNew = rssNewItems;
-    const subs = await getSubscriptions(env);
-    const subNewItems = [];
-    for (const sub of subs) {
-      if (trigger === "manual") {
-        if (!sub.pullEnabled) continue;
-      } else {
-        if (!isSubDue(sub, clock)) continue;
-      }
-      try {
-        const parsed = await fetchSub(env, sub, cfg);
-        const items = (parsed.items || []).slice(0, 30).map((it) => ({ ...it, feed_id: sub.id, feed_name: sub.title || sub.name, summary: it.description || "" }));
-        const newItems = await dedup(env, "sub:" + sub.id, items);
-        subNewItems.push(...newItems.map((it) => ({ ...it, source_kind: "sub" })));
-        await upsertRssItems(env, items.map((it) => ({ ...it, title: it.title || "(\u65E0\u6807\u9898)" })), today);
-        sub.lastPull = Date.now();
-      } catch (e) {
-        results.errors.push(`\u8BA2\u9605[${sub.title || sub.id}] ${e.message}`);
-      }
-    }
-    if (subs.some((s) => s.lastPull)) await saveSubscriptions(env, subs);
-    results.subNew = subNewItems;
-    const platformIds = (cfg.platforms.sources || []).map((s) => s.id);
-    const todayNews = await getNewsByDate(env, today, platformIds);
-    const todayRss = await getRssByDate(env, today, void 0);
-    let hotCandidates = [];
-    if (results.hotlist) {
-      const flat = [];
-      for (const [pid, pdata] of Object.entries(results.hotlist.byPlatform || {})) {
-        for (const it of pdata.items) flat.push({ ...it, platform_id: pid, platform_name: pdata.alias });
-      }
-      hotCandidates = flat;
-    }
-    if (!hotCandidates.length) {
-      // 兜底：本次未抓取热点榜单时，用今日已入库条目作为 AI 候选，保证各板块都能被筛选到
-      const seen = new Set();
-      for (const [pid, pdata] of Object.entries(todayNews)) {
-        for (const it of pdata) {
-          const k = it.url || it.title;
-          if (seen.has(k)) continue;
-          seen.add(k);
-          hotCandidates.push({ ...it, platform_id: pid, platform_name: pid });
-        }
-      }
-      hotCandidates = hotCandidates.slice(0, 200);
-    }
-    const flatToday = [];
-    for (const [pid, pdata] of Object.entries(todayNews)) {
-      for (const it of pdata) flatToday.push({ ...it, platform_id: pid, platform_name: pid });
-    }
-    const top = dedupeItems(flatToday).slice(0, cfg.report.top_count || 10);
-    const rssAlways = subNewItems;
-    let matchedHot = [];
-    let matchedRss = [];
-    if (cfg.filter.method === "ai" && aiAvailable(cfg, env)) {
-      try {
-        const r1 = await filterByAI(cfg, env, hotCandidates, cfg.filter.interests);
-        matchedHot = r1.matched || [];
-        if (r1.error) results.errors.push(`AI\u7B5B\u9009: ${r1.error}`);
-      } catch (e) {
-        results.errors.push(`AI\u7B5B\u9009\u5F02\u5E38, \u56DE\u9000\u5173\u952E\u8BCD: ${e.message}`);
-        matchedHot = filterByKeywords(hotCandidates, cfg.filter.keywords).matched;
-      }
-    } else {
-      matchedHot = filterByKeywords(hotCandidates, cfg.filter.keywords).matched;
-    }
-    // RSS/订阅条目：本次新抓 + 今日已入库（含 Telegram 频道），按关键词命中进入推送，
-    // 避免 Telegram 内容仅在"首次抓到"时出现一次
-    const rssFeedNames = {};
-    for (const s of subs) rssFeedNames[s.id] = s.title || s.name;
-    for (const f of cfg.rss.feeds || []) rssFeedNames[f.id] = f.name;
-    const rssPool = (todayRss || []).map((it) => ({ ...it, feed_name: it.feed_name || rssFeedNames[it.feed_id] || "" }));
-    matchedRss = filterByKeywords([...rssNewItems, ...rssPool], cfg.filter.keywords).matched;
-    let hotGroups = {};
-    const topTitles = new Set(top.map((it) => it.title));
-    if (cfg.report.display_mode === "platform") {
-      for (const m of matchedHot) {
-        if (!topTitles.has(m.item.title)) {
-          (hotGroups[m.item.platform_name || m.item.platform_id] = hotGroups[m.item.platform_name || m.item.platform_id] || []).push(m.item);
-        }
-      }
-    } else {
-      for (const m of matchedHot) {
-        if (topTitles.has(m.item.title)) continue;
-        const key = m.keyword || m.item.platform_name || m.item.platform_id || "\u5176\u4ED6";
-        (hotGroups[key] = hotGroups[key] || []).push(m.item);
-      }
-    }
-    for (const k of Object.keys(hotGroups)) hotGroups[k] = dedupeItems(hotGroups[k]);
-    if (!Object.keys(hotGroups).length) hotGroups = null;
+    const top = sel.top || [];
+    const matchedHot = sel.matchedHot || [];
+    const matchedRss = sel.matchedRss || [];
+    const rssAlways = sel.rssAlways || [];
+    const hotGroups = sel.hotGroups || null;
     if (cfg.ai_analysis.enabled && aiAvailable(cfg, env)) {
       try {
         const lastAnalysis = await readKV(env, ANALYSIS_KEY);
@@ -4520,68 +4810,14 @@ async function runPipeline(env, { trigger = "cron" } = {}) {
     const hasHot = matchedHot.length > 0;
     const hasRss = matchedRss.length > 0;
     const hasAlways = rssAlways.length > 0;
-    if (hasTop || hasHot || hasRss || hasAlways || cfg.ai_analysis.enabled && results.analysis) {
-      // 订阅/Telegram 英文内容翻译为中文（AI 失败回退原文）
-      const subItemsForTr = [...matchedRss.map((m) => m.item), ...rssAlways];
-      if (cfg.ai_translation && cfg.ai_translation.enabled) {
-        try { await translateItems(cfg, env, subItemsForTr, cfg.ai_translation.language); } catch (e) {}
-      }
-      const data = {
-        title: cfg.app.title || "Hot News \u70ED\u70B9\u901F\u9012",
-        timeStr: nowMinuteStr(tz),
-        top,
-        topCount: cfg.report.top_count || 10,
-        hotlist: hotGroups ? { groups: hotGroups, mode: cfg.report.display_mode } : void 0,
-        rss: matchedRss.map((m) => m.item),
-        rssAlways,
-        analysis: results.analysis
-      };
-      const parts = renderParts(cfg, data);
-      // AI 整理自定义订阅：把本轮新订阅内容去重+归类成精炼中文速览，作为推送第一条（配置 ai_analysis.sub_digest=true 开启）
-      if (cfg.ai_analysis && cfg.ai_analysis.sub_digest && rssAlways && rssAlways.length) {
-        try {
-          const digest = await aiTidySubscriptions(cfg, env, rssAlways);
-          if (digest) {
-            const dtext = `\u3010\u8BA2\u9605\u901F\u89C8\u3011${nowMinuteStr(tz)}\n${digest}\n\n\u{1F916} \u6570\u636E\u6765\u6E90\uFF1AAI \u6574\u7406\u81EA\u5B9A\u4E49\u8BA2\u9605`;
-            parts.unshift({ type: "digest", text: dtext });
-          }
-        } catch (e) {
-          results.errors.push(`\u8BA2\u9605\u901F\u89C8: ${e.message}`);
-        }
-      }
-      results.push = [];
-      // 企业微信通道支持"图片消息"，把 Telegram/热点图片直接推送为图片（每推 4 张封顶）
-      const wkChan = push_default.configuredChannels((cfg.notification || {}).channels || {}).find((c) => c.name === "wework");
-      let imgTotal = 0;
-      const imgSeen = new Set();
-      const imgFail = [];
-      for (const part of parts) {
-        const pr = await push_default.push(env, cfg, part.text);
-        results.push.push(...pr);
-        if (wkChan && part.images && part.images.length) {
-          for (const u of part.images) {
-            if (imgTotal >= 4 || imgSeen.has(u)) continue;
-            imgSeen.add(u);
-            let ir;
-            try { ir = await sendWeworkImage(wkChan.cfg, u); }
-            catch (e) { ir = { ok: false, error: e.message, url: u }; }
-            if (ir && ir.ok) imgTotal++;
-            else if (ir) imgFail.push(ir.url || u);
-          }
-        }
-      }
-      results.imagesSent = imgTotal;
-      // 轻量遥测：记录图片直发结果，便于核对交付（不影响主流程）
-      try { await writeKV(env, "hotnews:last:imgs", JSON.stringify({ imagesSent: imgTotal, fail: imgFail, at: (/* @__PURE__ */ new Date()).toISOString() }), 86400); } catch (e) {}
-      if (imgFail.length) {
-        const note = "\u{1F5BC}\uFE0F \u4E0B\u5217\u56FE\u7247\u672A\u80FD\u76F4\u53D1\uFF0C\u8BF7\u70B9\u94FE\u63A5\u67E5\u770B\uFF1A\n" + imgFail.join("\n");
-        results.push.push(...(await push_default.push(env, cfg, note)));
-      }
-      results.partsCount = parts.length;
-      results.totalItems = parts.reduce((s, p) => s + (p.itemsCount || 0), 0);
+    // 仅"推送时段"(08/12/17/20 或手动)才渲染并推送完整消息，其余 cron 仅抓取入库。
+    if (isPushSlot && (hasTop || hasHot || hasRss || hasAlways || cfg.ai_analysis.enabled && results.analysis)) {
+      // ===== 阶段 TRANSLATE → SUMMARIZE → RENDER → PUSH：组装并发送完整消息 =====
+      // 推送层独立 try/catch：即使渲染/推送抛错，也不阻断后续日报/周报与结果收尾。
       try {
-        await env.DB.prepare("INSERT INTO push_records (date, push_time, item_count, mode) VALUES (?, ?, ?, ?)").bind(today, (/* @__PURE__ */ new Date()).toISOString(), top.length + matchedHot.length + matchedRss.length + rssAlways.length, cfg.report.mode).run();
+        await pipelineEmit(cfg, env, tz, today, pushSlot, { top, matchedHot, matchedRss, rssAlways, hotGroups }, results);
       } catch (e) {
+        results.errors.push(`PUSH\u5C42\u5931\u8D25: ${e.message}`);
       }
     }
     const dailyCfg = cfg.report.daily || {};
@@ -4836,133 +5072,240 @@ function renderDashboard(cfg, data) {
   const tz = cfg.app.timezone || "Asia/Shanghai";
   const today = todayStr(tz);
   const title = cfg.app.title || "Hot News \u70ED\u70B9\u901F\u9012";
-  const subs = data.subscriptions || [];
-  const feedMeta = {};
-  for (const s of subs) {
-    feedMeta[s.id] = { name: s.title || s.name, icon: s.icon || "\u{1F517}", isSub: true };
-  }
-  for (const f of cfg.rss.feeds || []) {
-    feedMeta[f.id] = { name: f.name || f.id, icon: f.type === "platform" ? "\u{1F525}" : "\u{1F4F0}", isSub: false };
-  }
-  const byFeed = {};
-  for (const it of data.rssItems || []) {
-    const fid = it.feed_id || "";
-    if (!fid) continue;
-    (byFeed[fid] = byFeed[fid] || []).push(it);
-  }
-  let subsHtml = "";
-  for (const [fid, items] of Object.entries(byFeed)) {
-    const meta = feedMeta[fid] || { name: fid, icon: "\u{1F4F0}", isSub: false };
-    subsHtml += `<div class="section"><h2>${esc(meta.icon)} ${esc(meta.name)}</h2><ul>`;
-    for (const it of items.slice(0, 25)) {
-      const link = it.link || it.url || "";
-      subsHtml += `<li>`;
-      if (link) subsHtml += `<a href="${esc(link)}" target="_blank">`;
-      subsHtml += esc(it.title || "(\u65E0\u6807\u9898)");
-      if (link) subsHtml += `</a>`;
-      if (it.pubDate) subsHtml += ` <span class="tag">${esc(it.pubDate.slice(0, 10))}</span>`;
-      if (it.feed_id) subsHtml += ` <span class="tag">${esc(it.feed_id)}</span>`;
-      subsHtml += `</li>`;
+  const version = "v0.1";
+  // 复用 newsnow 的 phosphor 风格线性图标
+  const ICON = {
+    refresh: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M197.7 58.3A88 88 0 1 0 208 128"></path><path d="M224 32 208 64l-32-16"></path></svg>',
+    star: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"><path d="M128 24l30.4 61.6 67.9 9.9-49.1 47.9 11.6 67.6L128 184.5 67.2 211l11.6-67.6-49.1-47.9 67.9-9.9z"></path></svg>',
+    dots: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><circle cx="128" cy="48" r="12"/><circle cx="128" cy="128" r="12"/><circle cx="128" cy="208" r="12"/><circle cx="176" cy="48" r="12"/><circle cx="176" cy="128" r="12"/><circle cx="176" cy="208" r="12"/></svg>'
+  };
+  // —— 完全复用 newsnow 真实元素：来源卡片网格 + 顶部胶囊导航 + 深色主题 ——
+  const COLORS = [
+    ["#ef4444", "red"], ["#f97316", "orange"], ["#f59e0b", "amber"], ["#84cc16", "lime"],
+    ["#22c55e", "green"], ["#14b8a6", "teal"], ["#06b6d4", "cyan"], ["#3b82f6", "blue"],
+    ["#8b5cf6", "violet"], ["#a855f7", "purple"], ["#d946ef", "fuchsia"], ["#ec4899", "pink"]
+  ];
+  const colorFor = (id) => {
+    let h = 7;
+    for (const ch of String(id || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return COLORS[h % COLORS.length];
+  };
+  const hexrgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+  };
+  const relTime = (t) => {
+    const s = new Date(String(t || "")).getTime();
+    if (!t || isNaN(s)) return "";
+    const d = Math.floor((Date.now() - s) / 1e3);
+    if (d < 60) return "\u521A\u521A";
+    if (d < 3600) return Math.floor(d / 60) + " \u5206\u949F\u524D";
+    if (d < 86400) return Math.floor(d / 3600) + " \u5C0F\u65F6\u524D";
+    return Math.floor(d / 86400) + " \u5929\u524D";
+  };
+  const latest = (arr) => {
+    let best = "";
+    for (const it of arr || []) {
+      const v = it.time || it.pubDate || it.updated_at || "";
+      if (v && String(v) > String(best)) best = v;
     }
-    subsHtml += "</ul></div>";
+    return best;
+  };
+  // 平台热榜卡片（hottest 网格）
+  let cards = "";
+  let cardCount = 0;
+  let hotCount = 0;
+  const nav = [
+    ["focus", "\u5173\u6CE8", "sub"], ["hottest", "\u6700\u70ED", "hot"],
+    ["updated", "\u66F4\u65B0", "all"], ["realtime", "\u5B9E\u65F6", "sub"]
+  ];
+  for (const s of cfg.platforms.sources || []) {
+    const items = (data.newsByPlatform && data.newsByPlatform[s.id]) || [];
+    if (!items.length) continue;
+    const [hex, cname] = colorFor(s.id);
+    const name = s.name || s.id;
+    const up = relTime(latest(items));
+    hotCount += items.length;
+    const list = items.slice(0, 30).map((it, i) =>
+      `<a class="hotit" href="${esc(it.url || it.mobile_url || "#")}" target="_blank" rel="noopener"><span class="rk" style="color:${hex}">${i + 1}</span><span class="tx"><span class="tt">${esc(it.title || "(\u65E0\u6807\u9898)")}</span>${(it.summary || it.description) ? `<span class="mt">${esc(it.summary || it.description)}</span>` : ""}</span></a>`
+    ).join("");
+    cards += `<div class="card" data-group="hot" data-src="${esc(s.id)}" style="--cc:${hexrgba(hex,0.13)}">` +
+      `<div class="ch">` +
+        `<span class="av" style="background:${hex}">${esc(name.charAt(0))}</span>` +
+        `<span class="cn"><span class="nm">${esc(name)}</span><span class="up">${up ? up + " \u66F4\u65B0" : "\u52A0\u8F7D\u4E2D..."}</span></span>` +
+        `<span class="cr"><button class="rfr" title="\u5237\u65B0">${ICON.refresh}</button><button class="star" title="\u5173\u6CE8" style="color:${hex}">${ICON.star}</button><span class="grab">${ICON.dots}</span></span>` +
+      `</div><ol class="hotlist">${list}</ol></div>`;
+    cardCount++;
   }
-  if (!subsHtml) subsHtml = '<div class="section empty">\u6682\u65E0\u8BA2\u9605\u5185\u5BB9\uFF0C\u53BB\u300C\u63A7\u5236\u9762\u677F \u2192 \u81EA\u5B9A\u4E49\u8BA2\u9605\u300D\u6DFB\u52A0\u5427\u3002</div>';
+  // 订阅卡片（realtime 时间线）
+  const subByFeed = {};
+  let subGroups = 0;
+  for (const it of data.rssItems || []) {
+    if (!it.feed_id) continue;
+    (subByFeed[it.feed_id] = subByFeed[it.feed_id] || []).push(it);
+  }
+  const subMeta = new Map();
+  for (const s of data.subscriptions || []) subMeta.set(s.id, { name: s.name || s.title || s.id });
+  for (const f of cfg.rss.feeds || []) if (!subMeta.has(f.id)) subMeta.set(f.id, { name: f.name || f.id });
+  for (const [fid, its] of Object.entries(subByFeed)) {
+    if (!its.length) continue;
+    const [hex, cname] = colorFor(fid);
+    const m = subMeta.get(fid) || { name: fid };
+    const name = m.name || fid;
+    const up = relTime(latest(its));
+    const list = its.slice(0, 20).map((it) => {
+      const tm = relTime(it.pubDate || it.time);
+      return `<li class="tl"><span class="tlh"><span class="dash">-</span>${tm ? `<span class="tm">${tm}</span>` : ""}</span>` +
+        `<a class="tlt" href="${esc(it.link || it.url || "#")}" target="_blank" rel="noopener">${esc(it.title || "(\u65E0\u6807\u9898)")}</a></li>`;
+    }).join("");
+    cards += `<div class="card" data-group="sub" data-src="${esc(fid)}" style="--cc:${hexrgba(hex,0.13)}">` +
+      `<div class="ch">` +
+        `<span class="av" style="background:${hex}">${esc(name.charAt(0))}</span>` +
+        `<span class="cn"><span class="nm">${esc(name)}</span><span class="up">${up ? up + " \u66F4\u65B0" : "\u52A0\u8F7D\u4E2D..."}</span></span>` +
+        `<span class="cr"><span class="grab">${ICON.dots}</span></span>` +
+      `</div><ol class="tl">${list}</ol></div>`;
+    subGroups++;
+    cardCount++;
+  }
+  if (!cards) cards = `<p class="card empty">\u6682\u65E0\u6570\u636E</p>`;
+  // 推送记录面板
   let pushHtml = "";
   for (const p of data.pushRecords || []) {
     pushHtml += `<li>${esc(p.date)} ${esc(p.push_time)} \u2014 ${p.item_count} \u6761\uFF08${esc(p.mode)}\uFF09</li>`;
   }
-  pushHtml = pushHtml ? `<div class="section"><h2>\u63A8\u9001\u8BB0\u5F55</h2><ul>${pushHtml}</ul></div>` : "";
+  pushHtml = pushHtml ? `<ul class="pushes">${pushHtml}</ul>` : `<p class="empty">\u6682\u65E0\u63A8\u9001\u8BB0\u5F55</p>`;
+  // 顶部胶囊导航（复用 newsnow NavBar 元素：关注/最热/实时/更新）
+  const navHtml = nav.map(([id, nm, grp]) =>
+    `<button type="button" class="ntab" data-view="${id}" data-group="${grp}">${nm}</button>`
+  ).join("");
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} \u2014 ${today}</title>
+<title>${esc(title)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&family=Inter:wght@400;600;700&display=swap">
 <style>
-:root{--fg:#e6e8ee;--muted:#9aa0b0;--accent:#818cf8;--border:rgba(255,255,255,.09)}
+:root{--bg:#0a0a0a;--c-card:#101012;--fg:#e4e4e7;--fg-dim:#a1a1aa;--fg-mute:#71717a;--primary:#ef4444;--line:rgba(255,255,255,.08);--card-bg:rgba(255,255,255,.02)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:
-  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.20), transparent 60%),
-  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.16), transparent 55%),
-  radial-gradient(900px 700px at 50% 120%, rgba(34,211,238,.10), transparent 60%),
-  #0a0c12;color:var(--fg);font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;min-height:100vh}
-header{position:sticky;top:0;background:rgba(10,12,18,.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-header h1{font-size:17px;font-weight:600;background:linear-gradient(90deg,#a5b4fc,#e0e7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
-header .date{color:var(--muted);font-size:13px}
-header .ops a{color:var(--accent);text-decoration:none;font-size:13px;margin-left:12px}
-main{max-width:960px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px}
-.section{background:rgba(24,28,38,.5);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);transition:transform .15s ease,border-color .15s ease}
-.section:hover{border-color:rgba(129,140,248,.35);transform:translateY(-2px)}
-.section h2{font-size:13px;color:var(--muted);margin-bottom:10px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
-.section ul{list-style:none}
-.section li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px;display:flex;gap:8px;align-items:baseline}
-.section li:last-child{border-bottom:none}
-.section a{color:var(--fg);text-decoration:none}
-.section a:hover{color:var(--accent)}
-.tag{color:var(--muted);font-size:11px;background:rgba(255,255,255,.07);border-radius:4px;padding:1px 6px}
-.empty{color:var(--muted);text-align:center;padding:30px}
-footer{padding:24px;text-align:center;color:var(--muted);font-size:12px}
-#theme-btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:4px 10px;font-size:13px;cursor:pointer}
-#theme-btn:hover{color:var(--fg)}
-@media (max-width:720px){
-  main{padding:12px}
-  header{flex-wrap:wrap;padding:12px 14px}
-  header .ops{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
-  header .ops a{margin-left:0;white-space:nowrap}
-}
-@media (max-width:400px){
-  header>div{flex-wrap:wrap;gap:8px}
-  header .date{width:100%}
-  .section li{flex-wrap:wrap}
-}
-html[data-theme="light"] body{background:
-  radial-gradient(1100px 600px at 15% -10%, rgba(99,102,241,.14), transparent 60%),
-  radial-gradient(900px 500px at 105% 5%, rgba(168,85,247,.12), transparent 55%),
-  #f4f6fb;color:#1a1c23}
-html[data-theme="light"] header{background:rgba(255,255,255,.7);border-bottom-color:rgba(0,0,0,.08)}
-html[data-theme="light"] header h1{background:linear-gradient(90deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text}
-html[data-theme="light"] .section{background:rgba(255,255,255,.75);border-color:rgba(0,0,0,.08);box-shadow:0 8px 24px rgba(15,23,42,.08)}
-html[data-theme="light"] .section:hover{border-color:rgba(79,70,229,.4)}
-html[data-theme="light"] .section li{border-bottom-color:rgba(0,0,0,.06)}
-html[data-theme="light"] .section a{color:#1a1c23}
-html[data-theme="light"] .section a:hover{color:#4f46e5}
-html[data-theme="light"] .tag{background:rgba(0,0,0,.05);color:#5b6472}
-html[data-theme="light"] footer{color:#5b6472}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--fg);font-family:"Inter",-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;user-select:none}
+a{color:inherit;text-decoration:none}
+/* ===== header（newsnow：grid 50px auto 50px + 毛玻璃 sticky） ===== */
+header{display:grid;grid-template-columns:50px auto 50px;align-items:center;gap:8px;position:sticky;top:0;z-index:20;padding:14px 18px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(10,10,12,.72);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--primary);display:grid;place-items:center;font-weight:700;color:#fff;font-size:18px;flex:none}
+.wm{font-family:"Baloo 2",ui-monospace,monospace;font-weight:700;font-size:20px;line-height:.95;letter-spacing:.2px}
+.wm em{font-style:normal;color:var(--primary)}
+.wm small{display:block;color:var(--fg)} .wm small i{color:var(--primary);font-style:normal}
+.ver{color:var(--fg-mute);font-family:ui-monospace,monospace;font-size:11px;margin-left:2px;border:1px solid var(--line);border-radius:6px;padding:1px 5px;opacity:.7}
+.navbar{justify-self:center;display:inline-flex;gap:2px;padding:6px 8px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid var(--line);box-shadow:0 2px 10px rgba(239,68,68,.06)}
+.navbar .ntab{border:0;background:none;color:var(--fg-dim);padding:2px 14px;border-radius:9px;font-size:14px;cursor:pointer;transition:all .18s}
+.navbar .ntab:hover{background:rgba(239,68,68,.08);color:var(--fg)}
+.navbar .ntab.on{color:var(--primary);font-weight:700}
+.ops{justify-self:end;display:flex;align-items:center;gap:6px;color:var(--fg-mute)}
+.ops a{font-size:13px;padding:5px;border-radius:8px;transition:.15s;opacity:.75}
+.ops a:hover{color:var(--primary);opacity:1;background:rgba(255,255,255,.04)}
+.ops .date{font-family:ui-monospace,monospace;font-size:11px;opacity:.6}
+/* ===== 来源卡片网格（newsnow：auto-fill minmax 网格） ===== */
+.wrap{max-width:1280px;margin:0 auto;padding:20px 18px 60px}
+.grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(268px,1fr))}
+.card{display:flex;flex-direction:column;height:480px;border-radius:18px;padding:14px;position:relative;overflow:hidden;background:var(--card-bg);border:1px solid var(--line)}
+.card::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,var(--cc,transparent),transparent 42%);pointer-events:none;opacity:.5}
+.card .ch{position:relative;z-index:1;display:flex;align-items:center;gap:10px;margin:2px 4px 10px}
+.card .av{width:34px;height:34px;border-radius:50%;color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;flex:none;box-shadow:0 0 0 3px var(--card-bg)}
+.card .cn{display:flex;flex-direction:column;min-width:0}
+.card .nm{font-size:17px;font-weight:700;line-height:1.2}
+.card .up{font-size:11.5px;color:var(--fg-mute)}
+.card .cr{margin-left:auto;display:flex;align-items:center;gap:4px}
+.card .cr svg{display:block}
+.card .cr button,.card .grab{background:none;border:0;color:var(--fg-mute);cursor:pointer;padding:4px;border-radius:7px;opacity:.65;transition:.15s}
+.card .cr button:hover{opacity:1;color:var(--fg);background:rgba(255,255,255,.05)}
+.card .grab{cursor:grab;cursor:-webkit-grab}
+/* 热榜列表（newsnow hotlist：序号徽标 + 标题 + meta + hover） */
+.hotlist{list-style:none;overflow-y:auto;padding:2px;flex:1;min-height:0;z-index:1}
+.hotlist::-webkit-scrollbar{width:4px} .hotlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+.hotit{display:flex;gap:10px;align-items:baseline;padding:7px 8px;border-radius:9px;transition:background .15s}
+.hotit:hover{background:rgba(255,255,255,.05)}
+.hotit .rk{min-width:20px;text-align:center;background:rgba(255,255,255,.05);border-radius:6px;font-size:13px;font-weight:600;flex:none;padding:1px 0}
+.hotit .tx{display:flex;flex-direction:column;min-width:0}
+.hotit .tt{font-size:14px;line-height:1.35}
+.hotit .mt{font-size:11px;color:var(--fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 订阅时间线（newsnow timeline：左边框 + 时间行） */
+.tl{list-style:none;overflow-y:auto;padding:2px;flex:1;min-height:0;border-left:1px solid rgba(255,255,255,.14);margin-left:9px;padding-left:9px;z-index:1}
+.tl .tl{display:flex;flex-direction:column}
+.tl .tlh{display:flex;align-items:center;gap:5px;color:var(--fg-mute)}
+.tl .dash{color:var(--fg-mute);line-height:1}
+.tl .tm{font-size:11px;color:var(--fg-mute)}
+.tl .tlt{display:inline;font-size:13.5px;margin-left:2px;padding:1px 5px;border-radius:6px;transition:.15s;line-height:1.4}
+.tl .tlt:hover{background:rgba(255,255,255,.05)}
+/* 推送记录 */
+.pushes{list-style:none}
+.pushes li{color:var(--fg-mute);font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+#pushPanel{max-width:1280px;margin:8px auto 0;padding:16px 18px;border-top:1px solid var(--line)}
+#pushPanel .pn{color:var(--fg-mute);font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px;text-transform:uppercase}
+.empty{color:var(--fg-mute);text-align:center;padding:40px;grid-column:1/-1}
+.ft{padding:22px;text-align:center;color:var(--fg-mute);font-size:12px;font-family:ui-monospace,monospace}
+.ft a{color:var(--fg-mute)} .ft a:hover{color:var(--primary)}
+@media (max-width:640px){header{grid-template-columns:auto 1fr} .navbar{justify-self:end} .ops{display:none} .card{height:400px}}
 </style>
 </head>
 <body>
 <header>
-  <h1>${esc(title)}</h1>
-  <div style="display:flex;align-items:center;gap:14px">
-    <span class="date">${today}</span>
-    <span class="ops"><a href="/help">\u5E2E\u52A9</a><a href="/setting">\u63A7\u5236\u9762\u677F</a><a href="/rss">RSS \u8BA2\u9605</a></span>
-    <button id="theme-btn" type="button">\u2600\uFE0F</button>
-  </div>
+  <span class="brand">
+    <span class="logo">N</span>
+    <span class="wm"><em>News</em><small><i>N</i>ow</small></span>
+    <span class="ver">${esc(version)}</span>
+  </span>
+  <nav class="navbar">${navHtml}</nav>
+  <span class="ops"><span class="date">${today}</span><a href="/setting">\u63A7\u5236\u9762\u677F</a><a href="/rss">RSS</a><a href="/help">\u5E2E\u52A9</a></span>
 </header>
-<main>${subsHtml}${pushHtml}</main>
-<footer>hot-news \xB7 \u6570\u636E\u6BCF\u8F6E\u5B9A\u65F6\u6293\u53D6 \xB7 <a href="/setting/api/status" style="color:var(--muted)">\u72B6\u6001</a></footer>
+<div class="wrap">
+  <div class="grid" id="grid">${cards}</div>
+</div>
+<section id="pushPanel"><h4 class="pn">\u63A8\u9001\u8BB0\u5F55</h4>${pushHtml}</section>
+<div class="ft">hot-news \xB7 \u6570\u636E\u6BCF\u65E5 08/12/17/20 \u6574\u5408\u63A8\u9001 \xB7 <a href="/setting/api/status">\u72B6\u6001</a></div>
 <script>
 (function () {
-  var btn = document.getElementById('theme-btn');
-  if (!btn) return;
-  function applyTheme(t) {
-    document.documentElement.dataset.theme = t;
-    btn.textContent = t === 'light' ? '\u{1F319}' : '\u2600\uFE0F';
-    try { localStorage.setItem('hotnews_theme', t); } catch (e) {}
+  var grid = document.getElementById('grid');
+  var cards = Array.prototype.slice.call(grid.querySelectorAll('.card'));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.navbar .ntab'));
+  var focus = {}; // 关注清单（客户端内存）
+  function apply() {
+    var act = tabs.filter(function (t) { return t.classList.contains('on'); })[0];
+    var grp = act ? act.getAttribute('data-group') : 'all';
+    cards.forEach(function (c) {
+      var on = grp === 'all' || c.getAttribute('data-group') === grp;
+      if (act && act.getAttribute('data-view') === 'focus') on = c.getAttribute('data-group') === 'sub';
+      c.style.display = on ? '' : 'none';
+    });
   }
-  var saved = 'dark';
-  try { saved = localStorage.getItem('hotnews_theme') || 'dark'; } catch (e) {}
-  btn.addEventListener('click', function () {
-    applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('on'); });
+      t.classList.add('on');
+      apply();
+    });
   });
-  applyTheme(saved);
+  // 默认：最热
+  tabs.forEach(function (t) { if (t.getAttribute('data-view') === 'hottest') t.classList.add('on'); });
+  apply();
+  // 关注星标切换
+  grid.addEventListener('click', function (e) {
+    var btn = e.target.closest('.star');
+    if (!btn) return;
+    var card = btn.closest('.card');
+    var src = card.getAttribute('data-src');
+    focus[src] = !focus[src];
+    btn.style.opacity = focus[src] ? '1' : '.65';
+  });
 })();
 <\/script>
 </body>
 </html>`;
 }
-__name(renderDashboard, "renderDashboard");
-__name2(renderDashboard, "renderDashboard");
+  __name(renderDashboard, "renderDashboard");
+  __name2(renderDashboard, "renderDashboard");
 var objectToString = Object.prototype.toString;
 var isArray = Array.isArray || /* @__PURE__ */ __name2(/* @__PURE__ */ __name(function isArrayPolyfill(object) {
   return objectToString.call(object) === "[object Array]";
@@ -5910,7 +6253,7 @@ function parseTelegram(html, username) {
       }
     }
     items.push({
-      title: text ? text.split("\n")[0].slice(0, 100) : `(媒体消息) @${username}`,
+      title: text ? text.split("\n")[0].slice(0, 100) : `(媒体消息) ${username ? "@" + username : ""}`,
       url: postLink,
       link: postLink,
       guid: postLink,
